@@ -240,16 +240,9 @@ class Trainer:
         print(f"[Trainer] Dataset   : {len(dataset)} samples")
 
     # ── HARDNESS SCORING ─────────────────────────────────────────────────────
-
     @torch.no_grad()
     def _compute_hardness_from_loss(self) -> np.ndarray:
-        """
-        Compute per-sample hardness from reconstruction error.
-        
-        Returns numpy array [n_samples] with scores in [0, 1].
-        Higher score = larger reconstruction error = harder sample.
-        """
-        print("[Trainer] Computing hardness scores from reconstruction loss...")
+        print("[Trainer] Computing hardness scores with REAL labels...")
         t0 = time.time()
         
         ds = self.dataset
@@ -257,15 +250,10 @@ class Trainer:
         n_samples = len(ds)
         n_times = n_samples // N
         batch_size = self.config.get("batch_size", 64)
-        graph = ds.graph
-        
-        self.backbone.eval()
-        all_errors = torch.zeros(n_samples)
-        
-        # We no longer pre-build PyG Batches. Backbone handles it.
-        # Ensure graph is not None for dummy fallback uses
         graph = ds.graph if ds.graph is not None else Data(edge_index=torch.empty((2, 0), dtype=torch.long))
-
+    
+        self.backbone.eval()
+        all_scores = torch.zeros(n_samples)
         use_amp = (self.device != "cpu")
         
         for ti_start in range(0, n_times, batch_size):
@@ -274,31 +262,41 @@ class Trainer:
             idx_start = ti_start * N
             idx_end = ti_end * N
             
-            x_all = ds._precomputed_windows[idx_start:idx_end].to(
-                self.device, non_blocking=True)
+            x_all = ds._precomputed_windows[idx_start:idx_end].to(self.device)
+            # FIX: Fetch the actual labels for this batch
+            batch_labels = ds._precomputed_labels[idx_start:idx_end] 
             
             x_all_reshaped = x_all.view(B, N, -1, x_all.shape[-1])
             
             with torch.amp.autocast('cuda', enabled=use_amp):
-                _, x_hat_all = self.backbone(x_all_reshaped, graph)
+                z_all, x_hat_all = self.backbone(x_all_reshaped, graph)
                 
+            z_all = z_all.view(B * N, -1)
             x_hat_all = x_hat_all.view(B * N, -1)
-            # Forecast target: signals[t] — one step AFTER the window
-            target = ds._precomputed_targets[idx_start:idx_end].to(
-                self.device, non_blocking=True)
-            errors = torch.norm(x_hat_all - target, dim=1)
-            all_errors[idx_start:idx_end] = errors.cpu()
-        
+            target = ds._precomputed_targets[idx_start:idx_end].to(self.device)
+    
+            # Update the scorer loop to include the label
+            for i in range(B * N):
+                global_idx = idx_start + i
+                # FIX: Pass the actual label to the scorer
+                h = self.rag_scorer.score_hardness(
+                    z=z_all[i],
+                    x=target[i], # using target as the 'raw' x
+                    x_hat=x_hat_all[i],
+                    node_id=global_idx % N,
+                    graph=graph,
+                    t=global_idx // N,
+                    ground_truth_label=int(batch_labels[i]) # PASSING REAL LABEL HERE
+                )
+                all_scores[global_idx] = h
+                
+        # Normalize with percentile clipping to fix the "stability" issue
+        scores_np = all_scores.numpy()
+        p5, p95 = np.percentile(scores_np, 5), np.percentile(scores_np, 95)
+        scores_np = np.clip((scores_np - p5) / (p95 - p5 + 1e-8), 0, 1)
+    
         self.backbone.train()
-        
-        # Normalize to [0, 1]
-        e_min = all_errors.min().item()
-        e_max = all_errors.max().item()
-        scores = ((all_errors - e_min) / (e_max - e_min + 1e-8)).numpy()
-        
-        print(f"[Trainer] Scored {n_samples:,} samples in {time.time()-t0:.1f}s  "
-              f"mean={scores.mean():.3f}  std={scores.std():.3f}")
-        return scores
+        return scores_np
 
     # ── SINGLE EPOCH ─────────────────────────────────────────────────────────
 
