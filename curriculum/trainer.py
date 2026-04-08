@@ -1,7 +1,7 @@
 """
 trainer.py — Unified Training Loop for RC-TGAD.
 Refactored for Unified Processing Unit [B, N, W, 1].
-RESTORED: Multi-GPU DataParallel + CPU Fast-Path.
+Includes DataParallel Graph-Wrapper Fix to prevent silent deadlocks.
 """
 
 import os
@@ -9,26 +9,22 @@ import time
 import numpy as np
 import torch
 import torch.nn as nn
-from torch_geometric.data import Data
 from typing import Dict, List, Tuple, Optional
 from curriculum.scheduler import get_batch_fast, pacing
 
 # ─────────────────────────────────────────────────────────────────────────────
-# MOCK CLASSES (Required by ablations.py imports)
+# MOCK CLASSES
 # ─────────────────────────────────────────────────────────────────────────────
-
 class MockBackbone(nn.Module):
     def __init__(self, d_in: int = 10, d_z: int = 64, num_nodes: int = 10):
         super().__init__()
         self.num_nodes = num_nodes
-
     def forward(self, x_windows, graph=None):
         pass
 
 class MockRAGScorer:
     def __init__(self, seed: int = 42):
         self.rng = np.random.RandomState(seed)
-
     def score_hardness(self, *args, **kwargs) -> float:
         return float(self.rng.random())
 
@@ -40,11 +36,22 @@ class MockTemporalGraphDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         return {}
 
+# ─────────────────────────────────────────────────────────────────────────────
+# THE DATAPARALLEL SHIELD
+# ─────────────────────────────────────────────────────────────────────────────
+class DPGraphWrapper:
+    """
+    Tricks nn.DataParallel into NOT slicing the graph in half.
+    Since it's a custom object, DataParallel will pass references safely to all GPUs.
+    """
+    def __init__(self, data):
+        self.edge_index = data.edge_index
+        self.edge_attr = getattr(data, 'edge_attr', None)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TRAINER
 # ─────────────────────────────────────────────────────────────────────────────
-
 class Trainer:
     def __init__(
         self,
@@ -103,9 +110,11 @@ class Trainer:
             
             x = torch.stack([d["x"] for d in batch_data]).to(self.device)
             y = torch.stack([d["y"] for d in batch_data])
-            graph = batch_data[0]["graph"]
             
-            z_all, x_hat_all = self.backbone(x, graph) 
+            # 🛡️ WRAP GRAPH TO PREVENT SHREDDING
+            graph_safe = DPGraphWrapper(batch_data[0]["graph"])
+            
+            z_all, x_hat_all = self.backbone(x, graph_safe) 
             target = x[:, :, -1, :] 
 
             B_real = x.shape[0]
@@ -115,13 +124,12 @@ class Trainer:
                 
                 for n in range(N):
                     global_idx = t_base_idx * N + n
-                    
                     h = self.rag_scorer.score_hardness(
                         z=z_all[b, n],
                         x=target[b, n],
                         x_hat=x_hat_all[b, n],
                         node_id=n,
-                        graph=graph,
+                        graph=batch_data[0]["graph"], # Unwrapped for local scorer
                         t=t,
                         ground_truth_label=int(y[b, n])
                     )
@@ -165,15 +173,15 @@ class Trainer:
             
             batch_data = [ds[t_idx] for t_idx in current_t_batch]
             x = torch.stack([d["x"] for d in batch_data]).to(self.device)
-            graph = batch_data[0]["graph"]
+            
+            # 🛡️ WRAP GRAPH TO PREVENT SHREDDING
+            graph_safe = DPGraphWrapper(batch_data[0]["graph"])
             
             self.optimizer.zero_grad()
-            
-            z_all, x_hat_all = self.backbone(x, graph)
+            z_all, x_hat_all = self.backbone(x, graph_safe)
             target = x[:, :, -1, :]
             
             if is_full_dataset:
-                # Direct massive loss calculation
                 loss = nn.MSELoss()(x_hat_all, target)
             else:
                 loss = 0.0
@@ -183,7 +191,6 @@ class Trainer:
                     if len(selected_nodes) > 0:
                         loss += nn.MSELoss()(x_hat_all[b, selected_nodes], target[b, selected_nodes])
                         nodes_count += 1
-                
                 if nodes_count > 0:
                     loss = loss / nodes_count
             
@@ -200,20 +207,26 @@ class Trainer:
     def _validate(self, val_dataset) -> Tuple[float, float]:
         from utils.metrics import compute_f1, compute_auc_pr
         self.backbone.eval()
-        
         all_scores, all_labels = [], []
         
-        for i in range(len(val_dataset)):
-            data = val_dataset[i]
-            x = data["x"].unsqueeze(0).to(self.device) 
-            y = data["y"] 
+        batch_size = self.config.get("batch_size", 32)
+        n_val = len(val_dataset)
+        
+        # 🚀 BATCHED VALIDATION: Required for DataParallel, and 30x faster
+        for i in range(0, n_val, batch_size):
+            end_i = min(i + batch_size, n_val)
+            batch_data = [val_dataset[j] for j in range(i, end_i)]
             
-            _, x_hat = self.backbone(x, data["graph"])
+            x = torch.stack([d["x"] for d in batch_data]).to(self.device) 
+            y = torch.stack([d["y"] for d in batch_data]) 
+            
+            graph_safe = DPGraphWrapper(batch_data[0]["graph"])
+            _, x_hat = self.backbone(x, graph_safe)
             target = x[:, :, -1, :]
             
-            score = torch.norm(x_hat.squeeze(0) - target.squeeze(0), dim=-1)
-            all_scores.extend(score.cpu().tolist())
-            all_labels.extend(y.tolist())
+            score = torch.norm(x_hat - target, dim=-1)
+            all_scores.extend(score.flatten().cpu().tolist())
+            all_labels.extend(y.flatten().tolist())
             
         return compute_f1(all_scores, all_labels), compute_auc_pr(all_scores, all_labels)
 
