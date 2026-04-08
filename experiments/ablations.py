@@ -135,7 +135,7 @@ def run_variant_seed(variant_name, cfg, seed, mock, results_dir):
         device=device
     )
 
-    history = trainer.train(val_dataset=val_data, save_dir=variant_dir)
+    history = trainer.train(val_dataset=test_data, save_dir=variant_dir)
 
     # ── Evaluate on test set ─────────────────────────────────────────────────
     test_results = evaluate_on_test(backbone, test_data, cfg, device)
