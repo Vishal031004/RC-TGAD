@@ -95,14 +95,20 @@ class Trainer:
 
     @torch.no_grad()
     def _compute_hardness_from_loss(self) -> np.ndarray:
-        print("[Trainer] Computing hardness scores...")
+        print("\n[Trainer] Computing hardness scores...")
         self.backbone.eval()
         ds = self.dataset
         n_timesteps = len(ds)
         N = self.raw_backbone.num_nodes
-        batch_size = self.config.get("batch_size", 32)
+        
+        # 🚀 Use a larger batch size for inference to saturate both GPUs
+        batch_size = self.config.get("batch_size", 32) * 2 
         
         all_scores = np.zeros(n_timesteps * N, dtype=np.float32)
+        
+        # 🚀 ADD PROGRESS BAR so you know it is not frozen
+        from tqdm import tqdm
+        pbar = tqdm(total=n_timesteps, desc="Hardness Eval", unit="steps")
         
         for i in range(0, n_timesteps, batch_size):
             end_i = min(i + batch_size, n_timesteps)
@@ -110,15 +116,21 @@ class Trainer:
             
             x = torch.stack([d["x"] for d in batch_data]).to(self.device)
             y = torch.stack([d["y"] for d in batch_data])
-            
-            # 🛡️ WRAP GRAPH TO PREVENT SHREDDING
             graph_safe = DPGraphWrapper(batch_data[0]["graph"])
             
+            # 🚀 BOTH T4 GPUs ENGAGE HERE
             z_all, x_hat_all = self.backbone(x, graph_safe) 
+            
             target = torch.stack([
                 torch.tensor(ds.signals[d["t"]], dtype=torch.float32) 
                 for d in batch_data
             ]).unsqueeze(-1).to(self.device)
+
+            # 🛡️ THE FIX: Move the ENTIRE batch to CPU memory at once. 
+            # Doing this inside the nested loop below causes severe PCIe choking.
+            z_all_cpu = z_all.cpu()
+            x_hat_all_cpu = x_hat_all.cpu()
+            target_cpu = target.cpu()
 
             B_real = x.shape[0]
             for b in range(B_real):
@@ -127,16 +139,21 @@ class Trainer:
                 
                 for n in range(N):
                     global_idx = t_base_idx * N + n
+                    
                     h = self.rag_scorer.score_hardness(
-                        z=z_all[b, n],
-                        x=target[b, n],
-                        x_hat=x_hat_all[b, n],
+                        z=z_all_cpu[b, n],        # Already on CPU!
+                        x=target_cpu[b, n],       # Already on CPU!
+                        x_hat=x_hat_all_cpu[b, n],# Already on CPU!
                         node_id=n,
-                        graph=batch_data[0]["graph"], # Unwrapped for local scorer
+                        graph=batch_data[0]["graph"],
                         t=t,
                         ground_truth_label=int(y[b, n])
                     )
                     all_scores[global_idx] = h
+            
+            pbar.update(B_real)
+            
+        pbar.close()
 
         score_min, score_max = all_scores.min(), all_scores.max()
         score_range = score_max - score_min
@@ -218,7 +235,7 @@ class Trainer:
         batch_size = self.config.get("batch_size", 32)
         n_val = len(val_dataset)
         
-        # 🚀 BATCHED VALIDATION: Required for DataParallel, and 30x faster
+        # 🚀 BATCHED VALIDATION
         for i in range(0, n_val, batch_size):
             end_i = min(i + batch_size, n_val)
             batch_data = [val_dataset[j] for j in range(i, end_i)]
@@ -228,17 +245,24 @@ class Trainer:
             
             graph_safe = DPGraphWrapper(batch_data[0]["graph"])
             _, x_hat = self.backbone(x, graph_safe)
-            target = torch.stack([
-                torch.tensor(val_dataset.signals[d["t"]], dtype=torch.float32) 
-                for d in batch_data
-            ]).unsqueeze(-1).to(self.device)
+            target = x[:, :, -1, :]
             
-            score = torch.norm(x_hat - target, dim=-1)
-            all_scores.extend(score.flatten().cpu().tolist())
-            all_labels.extend(y.flatten().tolist())
+            # Error per node: Shape [B, N]
+            node_scores = torch.norm(x_hat - target, dim=-1)
+            
+            # 🛡️ THE FIX: System-Level Aggregation
+            # Take the maximum sensor error as the overall factory anomaly score: Shape [B]
+            system_scores = node_scores.max(dim=1)[0]
+            
+            # Since the ground truth label is the same for all 51 sensors in a timestep,
+            # we just take the label from the 0th sensor: Shape [B]
+            system_labels = y[:, 0]
+            
+            all_scores.extend(system_scores.cpu().tolist())
+            all_labels.extend(system_labels.tolist())
             
         return compute_f1(all_scores, all_labels), compute_auc_pr(all_scores, all_labels)
-
+        
     def train(self, val_dataset=None, save_dir: str = "checkpoints"):
         os.makedirs(save_dir, exist_ok=True)
         epochs = self.config.get("epochs", 100)
