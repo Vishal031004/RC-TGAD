@@ -115,7 +115,10 @@ class Trainer:
             graph_safe = DPGraphWrapper(batch_data[0]["graph"])
             
             z_all, x_hat_all = self.backbone(x, graph_safe) 
-            target = x[:, :, -1, :] 
+            target = torch.stack([
+                torch.tensor(ds.signals[d["t"]], dtype=torch.float32) 
+                for d in batch_data
+            ]).unsqueeze(-1).to(self.device)
 
             B_real = x.shape[0]
             for b in range(B_real):
@@ -179,7 +182,10 @@ class Trainer:
             
             self.optimizer.zero_grad()
             z_all, x_hat_all = self.backbone(x, graph_safe)
-            target = x[:, :, -1, :]
+            target = torch.stack([
+                torch.tensor(ds.signals[d["t"]], dtype=torch.float32) 
+                for d in batch_data
+            ]).unsqueeze(-1).to(self.device)
             
             if is_full_dataset:
                 loss = nn.MSELoss()(x_hat_all, target)
@@ -222,7 +228,10 @@ class Trainer:
             
             graph_safe = DPGraphWrapper(batch_data[0]["graph"])
             _, x_hat = self.backbone(x, graph_safe)
-            target = x[:, :, -1, :]
+            target = torch.stack([
+                torch.tensor(val_dataset.signals[d["t"]], dtype=torch.float32) 
+                for d in batch_data
+            ]).unsqueeze(-1).to(self.device)
             
             score = torch.norm(x_hat - target, dim=-1)
             all_scores.extend(score.flatten().cpu().tolist())
