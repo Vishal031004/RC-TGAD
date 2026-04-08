@@ -13,6 +13,34 @@ from torch_geometric.data import Data
 from typing import Dict, List, Tuple, Optional
 from curriculum.scheduler import get_batch_fast, pacing
 
+# ─────────────────────────────────────────────────────────────────────────────
+# MOCK CLASSES (Required by ablations.py imports)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class MockBackbone(nn.Module):
+    def __init__(self, d_in: int = 10, d_z: int = 64, num_nodes: int = 10):
+        super().__init__()
+        self.num_nodes = num_nodes
+
+    def forward(self, x_windows, graph=None):
+        pass
+
+class MockRAGScorer:
+    def __init__(self, seed: int = 42):
+        self.rng = np.random.RandomState(seed)
+
+    def score_hardness(self, *args, **kwargs) -> float:
+        # Accepts any arguments (including the new ground_truth_label) and returns a dummy score
+        return float(self.rng.random())
+
+class MockTemporalGraphDataset(torch.utils.data.Dataset):
+    def __init__(self, *args, **kwargs):
+        pass
+    def __len__(self):
+        return 0
+    def __getitem__(self, idx):
+        return {}
+
 class Trainer:
     def __init__(
         self,
