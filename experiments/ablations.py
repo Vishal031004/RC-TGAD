@@ -55,8 +55,8 @@ class RandomHardnessScorer:
     def __init__(self, seed=0):
         self.rng = np.random.RandomState(seed)
 
-    def score_hardness(self, z, x, x_hat, node_id, graph, t, window_errors=None):
-        return float(self.rng.random())
+    def score_hardness(self, z, x, x_hat, node_id, graph, t, window_errors=None, ground_truth_label=None, **kwargs):
+            return float(self.rng.random())
 
     def get_all_scores(self, dataset):
         return {(node_id, t): float(self.rng.random()) for (node_id, t, _) in dataset}
