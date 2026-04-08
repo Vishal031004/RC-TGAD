@@ -81,24 +81,14 @@ class RealRAGScorer:
         self.k_neighbors    = cfg["rag"]["k_neighbors"]
         self.gamma          = cfg["rag"]["gamma"]
 
-    def score_hardness(self, z, x, x_hat, node_id, graph, t,
-                       window_errors=None) -> float:
+    def score_hardness(self, z, x, x_hat, node_id, graph, t, 
+                       ground_truth_label=0, **kwargs) -> float:
         """
-        Interface B — called by trainer.py per sample.
-        Delegates to Person 2's score_hardness() function with all
-        the stateful args it needs.
-
-        Note: window_errors param is ignored here — we maintain our
-        own internal list so state is consistent across the full dataset.
+        FIX: Removed hardcoded ground_truth_label=0.
+        Now receives the label from the trainer.
         """
         from rag.rag_scorer import score_hardness as p2_score_hardness
 
-        # We need ground_truth_label to add to the store.
-        # trainer.py doesn't pass it — use 0 as a safe default.
-        # In production this would be passed in; paper results are robust
-        # to this since H_RAG entropy is what matters, not individual labels.
-        # Person 2's store.add() happens inside score_hardness(), so the
-        # store grows correctly even with this approximation.
         return p2_score_hardness(
             z=z,
             x=x,
@@ -106,14 +96,14 @@ class RealRAGScorer:
             node_id=node_id,
             graph=graph,
             t=t,
-            window_errors=self.window_errors,   # pass our internal list
+            window_errors=self.window_errors,
             vector_store=self.vector_store,
-            ground_truth_label=0,               # approximation — see note above
+            ground_truth_label=ground_truth_label, # PASSING THROUGH
             alphas=self.alphas,
             k_neighbors=self.k_neighbors,
             gamma=self.gamma,
         )
-
+                           
     def get_all_scores(self, dataset_tuples) -> dict:
         """
         Interface B — pre-compute hardness scores for all (node_id, t) pairs.
