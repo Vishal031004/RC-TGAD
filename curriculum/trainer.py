@@ -1,6 +1,7 @@
 """
 trainer.py — Unified Training Loop for RC-TGAD.
 Refactored for Unified Processing Unit [B, N, W, 1].
+Includes Indexing Mapping and Scale Collapse Safeguard.
 """
 
 import os
@@ -88,8 +89,11 @@ class Trainer:
             B_real = x.shape[0]
             for b in range(B_real):
                 t = batch_data[b]["t"]
+                # 🛡️ FIX: Explicit Mapping. No longer assumes sequential indices.
+                t_base_idx = (t - ds.window) // getattr(ds, 'stride', 1)
+                
                 for n in range(N):
-                    global_idx = (i + b) * N + n
+                    global_idx = t_base_idx * N + n
                     
                     h = self.rag_scorer.score_hardness(
                         z=z_all[b, n],
@@ -102,8 +106,15 @@ class Trainer:
                     )
                     all_scores[global_idx] = h
 
-        # Normalize 0-1
-        all_scores = np.clip((all_scores - all_scores.min()) / (all_scores.max() - all_scores.min() + 1e-8), 0, 1)
+        # 🛡️ FIX: Safeguard against Scale Collapse
+        score_min, score_max = all_scores.min(), all_scores.max()
+        score_range = score_max - score_min
+        if score_range < 1e-6:
+            print("[Trainer] Hardness collapsed (Range < 1e-6). Using neutral 0.5.")
+            all_scores = np.full_like(all_scores, 0.5)
+        else:
+            all_scores = np.clip((all_scores - score_min) / (score_range + 1e-8), 0, 1)
+            
         self.backbone.train()
         return all_scores
 
@@ -167,7 +178,6 @@ class Trainer:
         self.backbone.eval()
         
         all_scores, all_labels = [], []
-        N = self.raw_backbone.num_nodes
         
         for i in range(len(val_dataset)):
             data = val_dataset[i]
