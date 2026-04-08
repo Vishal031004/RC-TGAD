@@ -20,52 +20,21 @@ from typing import Optional, List
 # Component 1 — H_temp
 # ======================================================================
 
-def compute_h_temp(
-    x: torch.Tensor,
-    x_hat: torch.Tensor,
-    window_errors: List[float],
-    eps: float = 1e-8,
-) -> float:
-    """
-    Temporal hardness based on LSTM reconstruction error.
-
-    A sample is HARD (H_temp → 1) when its reconstruction error is
-    SMALL relative to the window — i.e., the anomaly is subtle.
-    A sample with a very obvious reconstruction spike is EASY (H_temp → 0).
-
-    Args:
-        x:             Last-timestep signal — Tensor [d] or scalar Tensor [1].
-                       Must be same shape as x_hat.
-                       From real backbone: pass x_window[-1] (shape [1]).
-        x_hat:         LSTM reconstruction — Tensor [d] or [1].
-                       From real backbone: shape is [1] (single-channel per node).
-        window_errors: Running list of all per-sample L2 errors seen so far.
-                       Caller must maintain this list across the dataset.
-        eps:           Small constant to prevent division by zero.
-
-    Returns:
-        float in [0, 1].
-
-    Note on shapes:
-        Person 1's backbone processes one node at a time (univariate LSTM),
-        so x_hat.shape == (1,). Pass x = x_window[-1] to match.
-        For mock/multi-channel use, x and x_hat can be any equal shape [d].
-    """
-    # Flatten both to 1-D and ensure same length before norm
-    x_flat    = x.reshape(-1).float()
+def compute_h_temp(x, x_hat, window_errors, eps=1e-8):
+    x_flat = x.reshape(-1).float()
     x_hat_flat = x_hat.reshape(-1).float()
-
-    # If sizes differ (e.g. x=[55] from raw signal, x_hat=[1] from LSTM),
-    # fall back to the scalar absolute error on the matching first element.
-    if x_flat.shape != x_hat_flat.shape:
-        e = abs(x_flat[0].item() - x_hat_flat[0].item())
-    else:
-        e = torch.norm(x_flat - x_hat_flat, p=2).item()
-
-    e_min = float(min(window_errors)) if window_errors else 0.0
-    e_max = float(max(window_errors)) if window_errors else 1.0
-
-    # Invert: low error → high hardness (subtle anomaly)
+    
+    e = torch.norm(x_flat - x_hat_flat, p=2).item()
+    
+    if not window_errors:
+        return 0.5
+        
+    # FIX: Use percentiles instead of absolute min/max for stability
+    e_min = np.percentile(window_errors, 5)
+    e_max = np.percentile(window_errors, 95)
+    
+    # Invert: low error relative to history -> high hardness (subtle)
+    # Ensure clipping so the result stays in [0, 1]
     h_temp = 1.0 - (e - e_min) / (e_max - e_min + eps)
     return float(np.clip(h_temp, 0.0, 1.0))
 
