@@ -1,8 +1,6 @@
 """
 vector_store.py — FAISS-backed vector store for RC-TGAD (Person 2)
-
-Stores embeddings z with their ground-truth labels.
-Used by H_RAG to retrieve k nearest neighbors and compute label entropy.
+FIXED: Memory Cap implemented to prevent OOM and stale distributions.
 """
 
 import faiss
@@ -13,36 +11,24 @@ from typing import List, Dict
 class VectorStore:
     """
     FAISS L2 index that stores embeddings + binary labels (0=normal, 1=anomaly).
-
-    Usage:
-        store = VectorStore(dim=64)
-        store.add(z_numpy, label=0)
-        neighbors = store.query(z_numpy, k=10)
-        # neighbors: [{'label': int, 'dist': float}, ...]
     """
 
     def __init__(self, dim: int = 64):
-        """
-        Args:
-            dim: Embedding dimensionality. Must match backbone d_z (agreed as 64 on Day 1).
-        """
         self.dim = dim
-        self.index = faiss.IndexFlatL2(dim)   # exact L2 search — fine at this scale
-        self.labels: List[int] = []            # parallel list to FAISS internal storage
+        self.index = faiss.IndexFlatL2(dim)   # exact L2 search
+        self.labels: List[int] = []            
 
     # ------------------------------------------------------------------
     # Mutation
     # ------------------------------------------------------------------
 
     def add(self, z: np.ndarray, label: int) -> None:
-        """
-        Add one embedding to the store.
-
-        Args:
-            z:     1-D numpy array of shape (dim,) OR torch.Tensor.
-                   Will be cast to float32 internally.
-            label: Ground-truth label — 0 (normal) or 1 (anomaly).
-        """
+        """Add one embedding to the store."""
+        
+        # 🛡️ FIX: Prevent Memory Bloat and Stale Retrievals
+        if self.index.ntotal > 50000:
+            self.reset()
+            
         z_np = _to_numpy(z).reshape(1, -1).astype("float32")
         if z_np.shape[1] != self.dim:
             raise ValueError(
@@ -52,13 +38,12 @@ class VectorStore:
         self.labels.append(int(label))
 
     def add_batch(self, zs: np.ndarray, labels: List[int]) -> None:
-        """
-        Bulk add — slightly faster than calling add() in a loop.
-
-        Args:
-            zs:     2-D array shape (N, dim).
-            labels: List of N integer labels.
-        """
+        """Bulk add — slightly faster than calling add() in a loop."""
+        
+        # 🛡️ FIX: Prevent Memory Bloat and Stale Retrievals
+        if self.index.ntotal + len(labels) > 50000:
+            self.reset()
+            
         zs_np = _to_numpy(zs).astype("float32")
         assert zs_np.shape[0] == len(labels), "zs and labels must have same length"
         self.index.add(zs_np)
@@ -69,17 +54,7 @@ class VectorStore:
     # ------------------------------------------------------------------
 
     def query(self, z: np.ndarray, k: int = 10) -> List[Dict]:
-        """
-        Retrieve k nearest neighbors.
-
-        Args:
-            z: Query embedding — shape (dim,) or (1, dim).
-            k: Number of neighbors to retrieve.
-
-        Returns:
-            List of dicts [{'label': int, 'dist': float}, ...], ordered
-            nearest-first.  Returns [] if store is empty.
-        """
+        """Retrieve k nearest neighbors."""
         n_stored = self.index.ntotal
         if n_stored == 0:
             return []
@@ -90,7 +65,7 @@ class VectorStore:
 
         results = []
         for j, idx in enumerate(indices[0]):
-            if idx == -1:          # FAISS returns -1 when fewer than k exist
+            if idx == -1:          
                 continue
             results.append({
                 "label": self.labels[idx],
@@ -111,22 +86,15 @@ class VectorStore:
         self.labels.clear()
 
     def save(self, path: str) -> None:
-        """Persist index to disk (labels saved as .npy alongside)."""
         faiss.write_index(self.index, path)
         np.save(path + ".labels.npy", np.array(self.labels, dtype=np.int32))
 
     def load(self, path: str) -> None:
-        """Restore a previously saved index."""
         self.index = faiss.read_index(path)
         self.labels = np.load(path + ".labels.npy").tolist()
 
 
-# ------------------------------------------------------------------
-# Internal helpers
-# ------------------------------------------------------------------
-
 def _to_numpy(x) -> np.ndarray:
-    """Accept torch.Tensor or np.ndarray, always return np.ndarray."""
-    if hasattr(x, "detach"):          # torch.Tensor
+    if hasattr(x, "detach"):
         return x.detach().cpu().numpy()
     return np.asarray(x)
