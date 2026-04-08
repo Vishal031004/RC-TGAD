@@ -1,6 +1,6 @@
 """
 rag_scorer.py — Unified entry point for RAG hardness scoring.
-FIXED: Interface B alignment and causal ordering.
+FIXED: Interface B alignment, causal ordering, and Memory Sliding Window.
 """
 
 import torch
@@ -27,12 +27,16 @@ def score_hardness(
 ) -> float:
     alpha_1, alpha_2, alpha_3 = alphas
 
-    # 1. Compute H_temp
+    # 1. Compute H_temp using CURRENT history
     h_temp = compute_h_temp(x, x_hat, window_errors)
     
     # 2. Append error AFTER calculating h_temp to prevent lookahead bias
     e = torch.norm(x - x_hat, p=2).item()
     window_errors.append(e)
+    
+    # 🛡️ FIX: Memory Sliding Window to prevent stale normalization logic
+    if len(window_errors) > 10000:
+        window_errors.pop(0)
 
     # 3. H_struct
     h_struct = compute_h_struct(node_id, graph, anomaly_source_id, gamma)
