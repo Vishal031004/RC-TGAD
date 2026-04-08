@@ -1,6 +1,6 @@
 """
 base_dataset.py — Sliding window generator with causal graph construction.
-Includes fixes for [N, W, 1] shape constraints and correlation NaN handling.
+Updated for UNIFIED PROCESSING UNIT: Yields full plant snapshots [N, W, 1] per timestep 't'.
 """
 
 import numpy as np
@@ -38,22 +38,14 @@ class BaseTimeSeriesDataset(Dataset):
         self.graph = graph if graph is not None else \
             build_graph_from_correlation(self.signals, threshold=0.5)
 
-        # Vectorized Indexing
-        t_values = np.arange(window, T, stride, dtype=np.int32)
-        n_times  = len(t_values)
-        self._index_t = np.repeat(t_values, N)
-        self._index_v = np.tile(np.arange(N, dtype=np.int32), n_times)
+        # 🛡️ FIX 1: Unit of execution is now TIMESTEP 't' across ALL nodes
+        self._index_t = np.arange(window, T, stride, dtype=np.int32)
         self._len = len(self._index_t)
 
         self._precomputed_labels = self._vectorized_window_labels()
         
-        # 🛡️ FIX 4: Correct Data Shape [N, W, 1] applied here
+        # 🛡️ FIX 4: Correct Data Shape [num_samples, N, W, 1] applied here
         self._precomputed_windows = self._build_all_windows()
-
-        # Forecast targets
-        self._precomputed_targets = torch.from_numpy(
-            self.signals[self._index_t, self._index_v].astype(np.float32)
-        ).unsqueeze(-1)
 
     def _vectorized_window_labels(self) -> np.ndarray:
         T, N = self.labels.shape
@@ -62,14 +54,13 @@ class BaseTimeSeriesDataset(Dataset):
         cum[1:] = np.cumsum(self.labels, axis=0)
         
         t_arr = self._index_t
-        v_arr = self._index_v
-        window_sums = cum[t_arr, v_arr] - cum[t_arr - W, v_arr]
+        # Get labels for ALL nodes at time t -> Shape: [num_samples, N]
+        window_sums = cum[t_arr] - cum[t_arr - W]
         return (window_sums > 0).astype(np.int64)
 
     def _build_all_windows(self) -> torch.Tensor:
         """
-        Extracts windows and forces [W, 1] shape per sample, ensuring 
-        independent node processing by the LSTM later.
+        Extracts windows and forces [N, W, 1] shape per timestep.
         """
         from numpy.lib.stride_tricks import as_strided
         T, N = self.signals.shape
@@ -81,28 +72,31 @@ class BaseTimeSeriesDataset(Dataset):
         all_windows_view = as_strided(self.signals, shape=shape, strides=new_strides)
         
         start_indices = self._index_t - W
-        node_indices = self._index_v
         
-        # Extracted shape is [n_samples, W]
-        windows = all_windows_view[start_indices, :, node_indices]
+        # Extracted shape is [num_samples, W, N]
+        windows = all_windows_view[start_indices]
         
-        # 🛡️ shape is forced to [n_samples, W, 1] here 
+        # Transpose to [num_samples, N, W] so each node has its own temporal sequence
+        windows = np.transpose(windows, (0, 2, 1))
+        
+        # Add feature dimension -> [num_samples, N, W, 1]
         return torch.from_numpy(windows.copy().astype(np.float32)).unsqueeze(-1)
 
     def __len__(self):
         return self._len
 
     def __getitem__(self, idx):
+        # 🛡️ FIX: Returns the complete graph state at time 't'
         return {
-            "node_id" : int(self._index_v[idx]),
-            "t"       : int(self._index_t[idx]),
-            "x_window": self._precomputed_windows[idx], # Shape [W, 1]
-            "graph"   : self.graph,
-            "label"   : int(self._precomputed_labels[idx]),
+            "t"    : int(self._index_t[idx]),
+            "x"    : self._precomputed_windows[idx], # Shape [N, W, 1]
+            "y"    : torch.tensor(self._precomputed_labels[idx], dtype=torch.long), # Shape [N]
+            "graph": self.graph
         }
 
     def as_flat_list(self):
-        return list(zip(self._index_v.tolist(), self._index_t.tolist(), self._precomputed_labels.tolist()))
+        # Used by curriculum scheduler to get timesteps and their corresponding label vectors
+        return list(zip(self._index_t.tolist(), self._precomputed_labels.tolist()))
 
 
 def build_graph_from_correlation(signals: np.ndarray, threshold: float = 0.5) -> Data:
