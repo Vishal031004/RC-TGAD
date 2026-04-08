@@ -1,7 +1,7 @@
 """
 trainer.py — Unified Training Loop for RC-TGAD.
 Refactored for Unified Processing Unit [B, N, W, 1].
-Includes Indexing Mapping and Scale Collapse Safeguard.
+RESTORED: Multi-GPU DataParallel + CPU Fast-Path.
 """
 
 import os
@@ -30,7 +30,6 @@ class MockRAGScorer:
         self.rng = np.random.RandomState(seed)
 
     def score_hardness(self, *args, **kwargs) -> float:
-        # Accepts any arguments (including the new ground_truth_label) and returns a dummy score
         return float(self.rng.random())
 
 class MockTemporalGraphDataset(torch.utils.data.Dataset):
@@ -40,6 +39,11 @@ class MockTemporalGraphDataset(torch.utils.data.Dataset):
         return 0
     def __getitem__(self, idx):
         return {}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TRAINER
+# ─────────────────────────────────────────────────────────────────────────────
 
 class Trainer:
     def __init__(
@@ -54,7 +58,7 @@ class Trainer:
         self.raw_backbone   = backbone
         self.backbone       = backbone.to(device)
         
-        # Multi-GPU support
+        # 🛡️ RESTORED: Multi-GPU DataParallel
         if device == "cuda" and torch.cuda.device_count() > 1:
             self.backbone = nn.DataParallel(self.backbone)
             print(f"[Trainer] Using {torch.cuda.device_count()} GPUs via DataParallel")
@@ -84,10 +88,6 @@ class Trainer:
 
     @torch.no_grad()
     def _compute_hardness_from_loss(self) -> np.ndarray:
-        """
-        Computes hardness for all samples in the dataset.
-        Now operates on snapshots [N, W, 1].
-        """
         print("[Trainer] Computing hardness scores...")
         self.backbone.eval()
         ds = self.dataset
@@ -95,29 +95,22 @@ class Trainer:
         N = self.raw_backbone.num_nodes
         batch_size = self.config.get("batch_size", 32)
         
-        # We store scores as a flat array of [n_timesteps * N] to match scheduler expectations
         all_scores = np.zeros(n_timesteps * N, dtype=np.float32)
         
         for i in range(0, n_timesteps, batch_size):
             end_i = min(i + batch_size, n_timesteps)
             batch_data = [ds[j] for j in range(i, end_i)]
             
-            # Stack into [B, N, W, 1]
             x = torch.stack([d["x"] for d in batch_data]).to(self.device)
-            y = torch.stack([d["y"] for d in batch_data]) # [B, N]
+            y = torch.stack([d["y"] for d in batch_data])
             graph = batch_data[0]["graph"]
             
             z_all, x_hat_all = self.backbone(x, graph) 
-            # z_all: [B, N, d_z], x_hat_all: [B, N, d_in]
-            
-            # Reconstruction target is the last value of each window: [B, N, 1]
             target = x[:, :, -1, :] 
 
-            # Loop through batch to score via RAG
             B_real = x.shape[0]
             for b in range(B_real):
                 t = batch_data[b]["t"]
-                # 🛡️ FIX: Explicit Mapping. No longer assumes sequential indices.
                 t_base_idx = (t - ds.window) // getattr(ds, 'stride', 1)
                 
                 for n in range(N):
@@ -134,7 +127,6 @@ class Trainer:
                     )
                     all_scores[global_idx] = h
 
-        # 🛡️ FIX: Safeguard against Scale Collapse
         score_min, score_max = all_scores.min(), all_scores.max()
         score_range = score_max - score_min
         if score_range < 1e-6:
@@ -147,51 +139,55 @@ class Trainer:
         return all_scores
 
     def _train_epoch(self, indices, batch_size: int) -> float:
-        """
-        Trains on a subset of (node, t) samples provided by the scheduler.
-        """
         self.backbone.train()
         total_loss = 0.0
         n_steps = 0
         ds = self.dataset
         N = self.raw_backbone.num_nodes
         
-        # Group selected indices by timestep for efficient GNN processing
-        from collections import defaultdict
-        t_groups = defaultdict(list)
-        for idx in indices:
-            t_idx = idx // N
-            node_idx = idx % N
-            t_groups[t_idx].append(node_idx)
-            
-        t_indices = sorted(list(t_groups.keys()))
+        # 🚀 FAST PATH: Avoid 21-million item CPU loop if curriculum is OFF
+        is_full_dataset = (len(indices) == len(ds) * N)
+        
+        if is_full_dataset:
+            t_indices = list(range(len(ds)))
+        else:
+            from collections import defaultdict
+            t_groups = defaultdict(list)
+            for idx in indices:
+                t_idx = int(idx // N)
+                node_idx = int(idx % N)
+                t_groups[t_idx].append(node_idx)
+            t_indices = sorted(list(t_groups.keys()))
         
         for i in range(0, len(t_indices), batch_size):
             end_i = min(i + batch_size, len(t_indices))
             current_t_batch = t_indices[i:end_i]
             
-            # 🛡️ Unified Unit: We MUST load the full snapshot for the GNN
             batch_data = [ds[t_idx] for t_idx in current_t_batch]
             x = torch.stack([d["x"] for d in batch_data]).to(self.device)
             graph = batch_data[0]["graph"]
             
             self.optimizer.zero_grad()
             
-            # Forward pass: [B, N, d_z], [B, N, d_in]
             z_all, x_hat_all = self.backbone(x, graph)
-            target = x[:, :, -1, :] # Last value in window
+            target = x[:, :, -1, :]
             
-            # 🛡️ Curriculum Masking: Only calculate loss on nodes selected by scheduler
-            loss = 0.0
-            nodes_count = 0
-            for b, t_idx in enumerate(current_t_batch):
-                selected_nodes = t_groups[t_idx]
-                if len(selected_nodes) > 0:
-                    loss += nn.MSELoss()(x_hat_all[b, selected_nodes], target[b, selected_nodes])
-                    nodes_count += 1
+            if is_full_dataset:
+                # Direct massive loss calculation
+                loss = nn.MSELoss()(x_hat_all, target)
+            else:
+                loss = 0.0
+                nodes_count = 0
+                for b, t_idx in enumerate(current_t_batch):
+                    selected_nodes = t_groups[t_idx]
+                    if len(selected_nodes) > 0:
+                        loss += nn.MSELoss()(x_hat_all[b, selected_nodes], target[b, selected_nodes])
+                        nodes_count += 1
+                
+                if nodes_count > 0:
+                    loss = loss / nodes_count
             
-            if nodes_count > 0:
-                loss = loss / nodes_count
+            if isinstance(loss, torch.Tensor):
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.backbone.parameters(), 1.0)
                 self.optimizer.step()
@@ -209,13 +205,12 @@ class Trainer:
         
         for i in range(len(val_dataset)):
             data = val_dataset[i]
-            x = data["x"].unsqueeze(0).to(self.device) # [1, N, W, 1]
-            y = data["y"] # [N]
+            x = data["x"].unsqueeze(0).to(self.device) 
+            y = data["y"] 
             
             _, x_hat = self.backbone(x, data["graph"])
             target = x[:, :, -1, :]
             
-            # Error per node
             score = torch.norm(x_hat.squeeze(0) - target.squeeze(0), dim=-1)
             all_scores.extend(score.cpu().tolist())
             all_labels.extend(y.tolist())
@@ -227,12 +222,15 @@ class Trainer:
         epochs = self.config.get("epochs", 100)
         k_warmup = self.config.get("k_warmup", 30)
         batch_size = self.config.get("batch_size", 32)
-        n_samples = len(self.dataset) * self.raw_backbone.num_nodes # Total (node, t) pairs
+        n_samples = len(self.dataset) * self.raw_backbone.num_nodes 
         
         if self.use_curriculum:
             hardness_array = self._compute_hardness_from_loss()
         else:
             hardness_array = np.zeros(n_samples, dtype=np.float32)
+
+        print("\n[Trainer] Starting training...")
+        print("-" * 60)
 
         for epoch in range(epochs):
             t_start = time.time()
@@ -249,7 +247,6 @@ class Trainer:
             f1, auc_pr = 0.0, 0.0
             if val_dataset is not None and (epoch % 5 == 0 or epoch == epochs - 1):
                 f1, auc_pr = self._validate(val_dataset)
-                # Checkpointing logic here...
 
             print(f"Epoch {epoch} | Loss: {train_loss:.4f} | F1: {f1:.4f} | Time: {time.time()-t_start:.1f}s")
 
