@@ -65,7 +65,6 @@ class Trainer:
         self.raw_backbone   = backbone
         self.backbone       = backbone.to(device)
         
-        # 🛡️ RESTORED: Multi-GPU DataParallel
         if device == "cuda" and torch.cuda.device_count() > 1:
             self.backbone = nn.DataParallel(self.backbone)
             print(f"[Trainer] Using {torch.cuda.device_count()} GPUs via DataParallel")
@@ -89,10 +88,6 @@ class Trainer:
             "pct_data":   [],
         }
 
-        print(f"[Trainer] Device    : {self.device}")
-        print(f"[Trainer] Curriculum: {'ON' if use_curriculum else 'OFF'}")
-        print(f"[Trainer] Timesteps : {len(dataset)}")
-
     @torch.no_grad()
     def _compute_hardness_from_loss(self) -> np.ndarray:
         print("\n[Trainer] Computing hardness scores...")
@@ -100,13 +95,10 @@ class Trainer:
         ds = self.dataset
         n_timesteps = len(ds)
         N = self.raw_backbone.num_nodes
-        
-        # 🚀 Use a larger batch size for inference to saturate both GPUs
         batch_size = self.config.get("batch_size", 32) * 2 
         
         all_scores = np.zeros(n_timesteps * N, dtype=np.float32)
         
-        # 🚀 ADD PROGRESS BAR so you know it is not frozen
         from tqdm import tqdm
         pbar = tqdm(total=n_timesteps, desc="Hardness Eval", unit="steps")
         
@@ -118,16 +110,14 @@ class Trainer:
             y = torch.stack([d["y"] for d in batch_data])
             graph_safe = DPGraphWrapper(batch_data[0]["graph"])
             
-            # 🚀 BOTH T4 GPUs ENGAGE HERE
             z_all, x_hat_all = self.backbone(x, graph_safe) 
             
+            # 🛡️ FIX 1: Target the FUTURE step
             target = torch.stack([
                 torch.tensor(ds.signals[d["t"]], dtype=torch.float32) 
                 for d in batch_data
             ]).unsqueeze(-1).to(self.device)
 
-            # 🛡️ THE FIX: Move the ENTIRE batch to CPU memory at once. 
-            # Doing this inside the nested loop below causes severe PCIe choking.
             z_all_cpu = z_all.cpu()
             x_hat_all_cpu = x_hat_all.cpu()
             target_cpu = target.cpu()
@@ -139,11 +129,10 @@ class Trainer:
                 
                 for n in range(N):
                     global_idx = t_base_idx * N + n
-                    
                     h = self.rag_scorer.score_hardness(
-                        z=z_all_cpu[b, n],        # Already on CPU!
-                        x=target_cpu[b, n],       # Already on CPU!
-                        x_hat=x_hat_all_cpu[b, n],# Already on CPU!
+                        z=z_all_cpu[b, n],
+                        x=target_cpu[b, n],
+                        x_hat=x_hat_all_cpu[b, n],
                         node_id=n,
                         graph=batch_data[0]["graph"],
                         t=t,
@@ -158,7 +147,6 @@ class Trainer:
         score_min, score_max = all_scores.min(), all_scores.max()
         score_range = score_max - score_min
         if score_range < 1e-6:
-            print("[Trainer] Hardness collapsed (Range < 1e-6). Using neutral 0.5.")
             all_scores = np.full_like(all_scores, 0.5)
         else:
             all_scores = np.clip((all_scores - score_min) / (score_range + 1e-8), 0, 1)
@@ -173,7 +161,6 @@ class Trainer:
         ds = self.dataset
         N = self.raw_backbone.num_nodes
         
-        # 🚀 FAST PATH: Avoid 21-million item CPU loop if curriculum is OFF
         is_full_dataset = (len(indices) == len(ds) * N)
         
         if is_full_dataset:
@@ -193,12 +180,12 @@ class Trainer:
             
             batch_data = [ds[t_idx] for t_idx in current_t_batch]
             x = torch.stack([d["x"] for d in batch_data]).to(self.device)
-            
-            # 🛡️ WRAP GRAPH TO PREVENT SHREDDING
             graph_safe = DPGraphWrapper(batch_data[0]["graph"])
             
             self.optimizer.zero_grad()
             z_all, x_hat_all = self.backbone(x, graph_safe)
+            
+            # 🛡️ FIX 2: Target the FUTURE step
             target = torch.stack([
                 torch.tensor(ds.signals[d["t"]], dtype=torch.float32) 
                 for d in batch_data
@@ -235,7 +222,6 @@ class Trainer:
         batch_size = self.config.get("batch_size", 32)
         n_val = len(val_dataset)
         
-        # 🚀 BATCHED VALIDATION
         for i in range(0, n_val, batch_size):
             end_i = min(i + batch_size, n_val)
             batch_data = [val_dataset[j] for j in range(i, end_i)]
@@ -245,24 +231,23 @@ class Trainer:
             
             graph_safe = DPGraphWrapper(batch_data[0]["graph"])
             _, x_hat = self.backbone(x, graph_safe)
-            target = x[:, :, -1, :]
             
-            # Error per node: Shape [B, N]
-            node_scores = torch.norm(x_hat - target, dim=-1)
+            # 🛡️ FIX 3: Target the FUTURE step
+            target = torch.stack([
+                torch.tensor(val_dataset.signals[d["t"]], dtype=torch.float32) 
+                for d in batch_data
+            ]).unsqueeze(-1).to(self.device)
             
-            # 🛡️ THE FIX: System-Level Aggregation
-            # Take the maximum sensor error as the overall factory anomaly score: Shape [B]
+            # 🛡️ FIX 4: System-Level Aggregation (Take worst sensor as factory score)
+            node_scores = torch.norm(x_hat.view(x_hat.shape[0], x_hat.shape[1], -1) - target.view(target.shape[0], target.shape[1], -1), dim=-1)
             system_scores = node_scores.max(dim=1)[0]
-            
-            # Since the ground truth label is the same for all 51 sensors in a timestep,
-            # we just take the label from the 0th sensor: Shape [B]
             system_labels = y[:, 0]
             
             all_scores.extend(system_scores.cpu().tolist())
             all_labels.extend(system_labels.tolist())
             
         return compute_f1(all_scores, all_labels), compute_auc_pr(all_scores, all_labels)
-        
+
     def train(self, val_dataset=None, save_dir: str = "checkpoints"):
         os.makedirs(save_dir, exist_ok=True)
         epochs = self.config.get("epochs", 100)
