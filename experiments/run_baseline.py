@@ -13,6 +13,7 @@ import sys
 import json
 import argparse
 import numpy as np
+import torch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -40,22 +41,6 @@ def parse_args():
 # ─────────────────────────────────────────────────────────────────────────────
 
 def load_dataset(cfg, seed, mock=False):
-    """
-    Returns (train_dataset, val_dataset, test_dataset).
-
-    Mock mode : synthetic data, no files needed.
-    Real mode : calls Person 1's load_smap() / load_msl() / load_swat().
-
-    KEY FACTS about Person 1's datasets (from base_dataset.py):
-      - __getitem__ returns dict with keys:
-            x_window : Tensor [W, 1]   (d_in=1, univariate per node)
-            node_id  : int
-            t        : int
-            graph    : torch_geometric Data  (shared static graph)
-            label    : int  (1 if ANY step in window is anomalous)
-      - as_flat_list() returns [(node_id, t, label), ...]
-        → we attach this as .as_tuples for the curriculum scheduler
-    """
     if mock:
         d_in       = cfg["model"]["d_in"]
         win        = cfg["model"]["window_size"]
@@ -65,9 +50,6 @@ def load_dataset(cfg, seed, mock=False):
         return train_data, val_data, test_data
 
     # ── REAL MODE ─────────────────────────────────────────────────────────────
-    # Person 1 exposes plain functions, not class constructors.
-    # load_smap / load_msl return (train_ds, val_ds, test_ds, channel_ids)
-    # load_swat  returns (train_ds, val_ds, test_ds, channel_ids)  [same pattern]
     dataset_name = cfg["data"]["dataset"]
     win    = cfg["model"]["window_size"]
     stride = cfg["data"].get("stride", 1)
@@ -89,7 +71,7 @@ def load_dataset(cfg, seed, mock=False):
             val_ratio = cfg["data"]["val_split"],
         )
     elif dataset_name == "msl":
-        from data.smap import load_msl      # load_msl lives inside smap.py
+        from data.smap import load_msl      
         train_data, val_data, test_data, _ = load_msl(
             data_dir  = cfg["data"].get("data_dir", "data/raw/smap"),
             window    = win,
@@ -99,12 +81,9 @@ def load_dataset(cfg, seed, mock=False):
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
 
-    # Auto-detect num_nodes from actual data (prevents SMAP/SWAT mismatch)
     cfg["model"]["num_nodes"] = train_data.N
     print(f"[Dataset] Auto-detected num_nodes = {train_data.N}")
 
-    # Attach .as_tuples — curriculum scheduler needs (node_id, t, label) list.
-    # Person 1's dataset exposes as_flat_list() for exactly this purpose.
     train_data.as_tuples = train_data.as_flat_list()
     val_data.as_tuples   = val_data.as_flat_list()
     test_data.as_tuples  = test_data.as_flat_list()
@@ -113,33 +92,27 @@ def load_dataset(cfg, seed, mock=False):
 
 
 def load_backbone(cfg, mock=False):
-    """
-    Returns backbone model.
-    Mock mode : random linear layers (no torch_geometric needed).
-    Real mode : Person 1's Backbone — takes individual kwargs, NOT a config dict.
-    """
     if mock:
         return MockBackbone(
             d_in=cfg["model"]["d_in"],
             d_z=cfg["model"]["gnn_out_dim"],
-            num_nodes=10   # matches MockTemporalGraphDataset default
+            num_nodes=10   
         )
     # ── REAL MODE ─────────────────────────────────────────────────────────────
     from backbone.backbone import Backbone
     return Backbone(
-        d_in        = cfg["model"]["d_in"],           # 1 (univariate per node)
-        hidden_size = cfg["model"]["lstm_hidden"],    # 64
-        gnn_out_dim = cfg["model"]["gnn_out_dim"],    # 64
-        num_nodes   = cfg["model"]["num_nodes"],      # 51 SWAT / 55 SMAP,MSL
-        window_size = cfg["model"]["window_size"],    # 30
-        lstm_layers = cfg["model"]["lstm_layers"],    # 2
-        gat_heads   = cfg["model"]["gnn_heads"],      # 4
-        dropout     = cfg["model"]["dropout"],        # 0.1
+        d_in        = cfg["model"]["d_in"],         
+        hidden_size = cfg["model"]["lstm_hidden"],    
+        gnn_out_dim = cfg["model"]["gnn_out_dim"],    
+        num_nodes   = cfg["model"]["num_nodes"],      
+        window_size = cfg["model"]["window_size"],    
+        lstm_layers = cfg["model"]["lstm_layers"],    
+        gat_heads   = cfg["model"]["gnn_heads"],      
+        dropout     = cfg["model"]["dropout"],        
     )
 
 
 def load_rag_scorer(cfg, mock=False):
-    """Baseline always uses mock scorer — curriculum is OFF, scores are unused."""
     return MockRAGScorer()
 
 
@@ -147,19 +120,10 @@ def load_rag_scorer(cfg, mock=False):
 # EVALUATION ON TEST SET
 # ─────────────────────────────────────────────────────────────────────────────
 
+@torch.no_grad()
 def evaluate_on_test(backbone, test_dataset, cfg, device) -> dict:
-    """
-    Run inference on test set, compute all metrics.
-
-    IMPORTANT — how Person 1's backbone works:
-      - backbone.forward(x_windows, graph) expects x_windows: [N, W, d_in]
-        for ALL nodes at a single timestep, returns z_all [N,d_z], x_hat_all [N,d_in]
-      - We group by timestep t, stack all node windows, run one forward pass,
-        then collect per-node scores.
-    """
-    import torch
-    from torch.utils.data import DataLoader
     from collections import defaultdict
+    from torch.utils.data import DataLoader
 
     backbone.eval()
     all_scores = []
@@ -167,7 +131,6 @@ def evaluate_on_test(backbone, test_dataset, cfg, device) -> dict:
 
     # ───────────────── MOCK PATH ─────────────────
     if isinstance(backbone, MockBackbone):
-
         def mock_collate(batch):
             return {
                 "x_window": torch.stack([b["x_window"] for b in batch]),
@@ -185,74 +148,60 @@ def evaluate_on_test(backbone, test_dataset, cfg, device) -> dict:
             collate_fn=mock_collate,
         )
 
-        with torch.no_grad():
-            for batch in loader:
-
-                x_window = batch["x_window"].to(device, non_blocking=True)   # [B,W,d_in]
-                target   = batch["target"].to(device, non_blocking=True) # [B,d_in]
-                labels   = batch["label"]
-
-                # Batched GPU forward pass
-                _, x_hat_all = backbone(x_window, None)                      # [B,d_in]
-
-                scores = torch.norm(x_hat_all - target, dim=1)                # [B]
-
-                all_scores.extend(scores.cpu().tolist())
-                all_labels.extend(labels.tolist())
+        for batch in loader:
+            x_window = batch["x_window"].to(device, non_blocking=True)
+            target   = batch["target"].to(device, non_blocking=True) 
+            labels   = batch["label"]
+            _, x_hat_all = backbone(x_window, None)
+            scores = torch.norm(x_hat_all - target, dim=1)
+            all_scores.extend(scores.cpu().tolist())
+            all_labels.extend(labels.tolist())
 
     # ───────────────── REAL DATASET PATH ─────────────────
     else:
-
-        with torch.no_grad():
-            from torch_geometric.data import Batch, Data
-
-            # Use raw module if wrapped in DataParallel
-            backbone_module = backbone.module if isinstance(backbone, torch.nn.DataParallel) else backbone
-            N = backbone_module.num_nodes
+        from curriculum.trainer import DPGraphWrapper
+        
+        print("\n[Evaluate] Running final test evaluation in batches to prevent OOM...")
+        
+        batch_size = cfg["training"].get("batch_size", 32) * 2  # Safe batched inference
+        n_test = len(test_dataset)
+        
+        for i in range(0, n_test, batch_size):
+            end_i = min(i + batch_size, n_test)
+            batch_data = [test_dataset[j] for j in range(i, end_i)]
             
-            n_samples = len(test_dataset)
-            n_times = n_samples // N
-            batch_size = cfg["training"].get("batch_size", 512)
-            graph = test_dataset.graph if test_dataset.graph is not None else Data(edge_index=torch.empty((2, 0), dtype=torch.long))
-            use_amp = (device != "cpu")
-
-            # Data is ordered by timestep — slice directly
-            for ti_start in range(0, n_times, batch_size):
-                ti_end = min(ti_start + batch_size, n_times)
-                B = ti_end - ti_start
-
-                idx_start = ti_start * N
-                idx_end = ti_end * N
-
-                x_all = test_dataset._precomputed_windows[idx_start:idx_end].to(
-                    device, non_blocking=True)
-                chunk_labels = test_dataset._precomputed_labels[idx_start:idx_end]
-
-                x_all_reshaped = x_all.view(B, N, -1, x_all.shape[-1])
-
-                with torch.amp.autocast('cuda', enabled=use_amp):
-                    z_all, x_hat_all = backbone(x_all_reshaped, graph)
-
-                x_hat_all = x_hat_all.view(B * N, -1)
-                
-                # Forecast target: signals[t] — one step AFTER the window
-                target = test_dataset._precomputed_targets[idx_start:idx_end].to(
-                    device, non_blocking=True)
-                
-                scores = torch.norm(x_hat_all - target, dim=1)
-
-                all_scores.extend(scores.cpu().tolist())
-                all_labels.extend(chunk_labels.tolist())
+            x = torch.stack([d["x"] for d in batch_data]).to(device)
+            y = torch.stack([d["y"] for d in batch_data])
+            
+            graph_safe = DPGraphWrapper(batch_data[0]["graph"])
+            _, x_hat = backbone(x, graph_safe)
+            
+            # Target the FUTURE step
+            target = torch.stack([
+                torch.tensor(test_dataset.signals[d["t"]], dtype=torch.float32) 
+                for d in batch_data
+            ]).unsqueeze(-1).to(device)
+            
+            # System-Level Aggregation (Take worst sensor as factory score)
+            node_scores = torch.norm(
+                x_hat.view(x_hat.shape[0], x_hat.shape[1], -1) - 
+                target.view(target.shape[0], target.shape[1], -1), 
+                dim=-1
+            )
+            system_scores = node_scores.max(dim=1)[0]
+            system_labels = y[:, 0]
+            
+            all_scores.extend(system_scores.cpu().tolist())
+            all_labels.extend(system_labels.tolist())
 
     return evaluate(all_scores, all_labels, verbose=False)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SINGLE SEED RUN
 # ─────────────────────────────────────────────────────────────────────────────
 
 def run_single_seed(cfg, seed, mock, results_dir):
-    """Run baseline for one seed. Returns test metrics dict."""
-    import torch
     torch.manual_seed(seed)
     np.random.seed(seed)
 
