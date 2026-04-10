@@ -1,4 +1,3 @@
-%%writefile /kaggle/working/Virtual-Focus-Group/utils/logger.py
 import json
 import csv
 import datetime
