@@ -60,7 +60,8 @@ class Trainer:
         dataset,
         config: Dict,
         use_curriculum: bool = True,
-        device: str = "cuda" if torch.cuda.is_available() else "cpu"
+        device: str = "cuda" if torch.cuda.is_available() else "cpu",
+        logger=None  # 🛡️ FIX: Added logger to the initialization
     ):
         self.raw_backbone   = backbone
         self.backbone       = backbone.to(device)
@@ -74,6 +75,7 @@ class Trainer:
         self.config         = config
         self.use_curriculum = use_curriculum
         self.device         = device
+        self.logger         = logger # 🛡️ FIX: Save the logger instance
 
         self.optimizer = torch.optim.Adam(
             self.backbone.parameters(),
@@ -268,6 +270,13 @@ class Trainer:
             
             if self.use_curriculum:
                 indices = get_batch_fast(hardness_array, epoch, k_warmup)
+                
+                # 🛡️ FIX: Log the pacing metrics to the CSV so you can prove curriculum works
+                if self.logger:
+                    current_k = len(indices)
+                    max_hardness = float(np.max(hardness_array[indices])) if current_k > 0 else 0.0
+                    self.logger.log_curriculum_pacing(epoch, current_k, n_samples, max_hardness)
+
                 if epoch > 0 and epoch % 10 == 0:
                     hardness_array = self._compute_hardness_from_loss()
             else:
@@ -278,7 +287,12 @@ class Trainer:
             f1, auc_pr = 0.0, 0.0
             if val_dataset is not None and (epoch % 5 == 0 or epoch == epochs - 1):
                 f1, auc_pr = self._validate(val_dataset)
+            
+            epoch_time = time.time() - t_start
+            print(f"Epoch {epoch} | Loss: {train_loss:.4f} | F1: {f1:.4f} | Time: {epoch_time:.1f}s")
 
-            print(f"Epoch {epoch} | Loss: {train_loss:.4f} | F1: {f1:.4f} | Time: {time.time()-t_start:.1f}s")
+            # 🛡️ FIX: Dump the final numbers for this epoch into the metrics.csv
+            if self.logger:
+                self.logger.log_epoch(epoch, train_loss, f1, epoch_time)
 
         return self.history
