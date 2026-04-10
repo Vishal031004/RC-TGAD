@@ -1,16 +1,6 @@
 # experiments/ablations.py
 # PERSON 3 — Full Ablation Suite
 # RC-TGAD: Runs all 6 ablation variants and produces the paper table
-#
-# MODES:
-#   Mock mode  (NOW)   : python experiments/ablations.py --mock
-#   Real mode  (Merge) : python experiments/ablations.py --dataset swat
-#
-# Output:
-#   results/ablations/<dataset>/
-#       variant_name/seed{N}/test_results.json
-#       aggregate.json          <- all variants, all metrics, mean±std
-#       paper_table.txt         <- copy-paste ready for LaTeX
 
 import os
 import sys
@@ -21,12 +11,14 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from configs.config_loader  import load_config, get_ablation_configs
-from curriculum.trainer     import Trainer, MockBackbone, MockRAGScorer, MockTemporalGraphDataset
-from utils.metrics          import evaluate, AblationTracker
+from configs.config_loader    import load_config, get_ablation_configs
+from curriculum.trainer       import Trainer, MockBackbone, MockRAGScorer, MockTemporalGraphDataset
+from utils.metrics            import evaluate, AblationTracker
 from experiments.run_baseline import load_dataset, load_backbone, evaluate_on_test
-from experiments.run_rctgad  import RealRAGScorer
+from experiments.run_rctgad   import RealRAGScorer
 
+# Import the ultimate IEEE logger we just created
+from utils.logger             import DeepResearchLogger
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ARGUMENT PARSER
@@ -46,17 +38,15 @@ def parse_args():
 
 # ─────────────────────────────────────────────────────────────────────────────
 # RANDOM CURRICULUM SCORER
-# Used for "Random Curriculum" ablation variant only.
-# Same scheduler, but hardness scores are random — proves principled scoring matters.
 # ─────────────────────────────────────────────────────────────────────────────
 
 class RandomHardnessScorer:
-    """Assigns random hardness scores — used only for the Random Curriculum ablation."""
+    """Assigns random hardness scores to prove the math matters."""
     def __init__(self, seed=0):
         self.rng = np.random.RandomState(seed)
 
-    def score_hardness(self, z, x, x_hat, node_id, graph, t, window_errors=None, ground_truth_label=None, **kwargs):
-            return float(self.rng.random())
+    def score_hardness(self, z, x, x_hat, node_id, graph, t, window_errors=None):
+        return float(self.rng.random())
 
     def get_all_scores(self, dataset):
         return {(node_id, t): float(self.rng.random()) for (node_id, t, _) in dataset}
@@ -67,10 +57,6 @@ class RandomHardnessScorer:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def run_variant_seed(variant_name, cfg, seed, mock, results_dir):
-    """
-    Run one ablation variant for one seed.
-    Returns test metrics dict.
-    """
     import torch
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -79,7 +65,6 @@ def run_variant_seed(variant_name, cfg, seed, mock, results_dir):
     variant_dir = os.path.join(results_dir, safe_name, f"seed{seed}")
     os.makedirs(variant_dir, exist_ok=True)
 
-    # Skip if already computed (resume-friendly)
     result_path = os.path.join(variant_dir, "test_results.json")
     if os.path.exists(result_path):
         print(f"  [Skip] {variant_name} seed={seed} — already computed")
@@ -90,33 +75,33 @@ def run_variant_seed(variant_name, cfg, seed, mock, results_dir):
     cfg["training"]["seed"]    = seed
     cfg["logging"]["run_name"] = f"{safe_name}_seed{seed}"
 
-    # Load data and backbone
+    # 1. Initialize the Ultimate Paper Logger
+    paper_logger = DeepResearchLogger(save_dir=variant_dir, config_dict=cfg)
+
+    # Load Data & Model
     train_data, val_data, test_data = load_dataset(cfg, seed, mock)
     backbone = load_backbone(cfg, mock)
+
+    # 2. Dump the architecture details for the methodology section
+    paper_logger.log_architecture(backbone, train_data)
 
     device = cfg["training"]["device"]
     if device == "cuda" and not torch.cuda.is_available():
         device = "cpu"
 
-    # ── Choose scorer based on variant ──────────────────────────────────────
     curriculum_enabled = cfg["curriculum"]["enabled"]
 
     if not curriculum_enabled:
-        # Baseline: no curriculum, scorer irrelevant
         rag_scorer = MockRAGScorer()
     elif variant_name == "Random Curriculum":
-        # Random scores — scheduler runs but hardness is meaningless
         rag_scorer = RandomHardnessScorer(seed=seed)
     else:
-        # All real curriculum variants: use RealRAGScorer (wraps Person 2's modules)
-        # Falls back to MockRAGScorer automatically if rag/ not present yet
         try:
             rag_scorer = RealRAGScorer(cfg)
-            rag_scorer.reset()   # critical: fresh store for each variant/seed
+            rag_scorer.reset()
         except Exception:
             rag_scorer = MockRAGScorer(seed=seed)
 
-    # ── Build trainer ────────────────────────────────────────────────────────
     trainer = Trainer(
         backbone=backbone,
         rag_scorer=rag_scorer,
@@ -132,15 +117,14 @@ def run_variant_seed(variant_name, cfg, seed, mock, results_dir):
             "wandb_project": cfg["logging"]["wandb_project"],
         },
         use_curriculum=curriculum_enabled,
-        device=device
+        device=device,
+        logger=paper_logger  # <--- PASS THE LOGGER TO THE TRAINER
     )
 
-    history = trainer.train(val_dataset=test_data, save_dir=variant_dir)
+    history = trainer.train(val_dataset=val_data, save_dir=variant_dir)
 
-    # ── Evaluate on test set ─────────────────────────────────────────────────
     test_results = evaluate_on_test(backbone, test_data, cfg, device)
 
-    # Save
     with open(result_path, "w") as f:
         json.dump({**test_results, "history": history}, f, indent=2)
 
@@ -152,15 +136,10 @@ def run_variant_seed(variant_name, cfg, seed, mock, results_dir):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def generate_latex_table(agg, dataset_name):
-    """
-    Generates a LaTeX table string ready to paste into your paper.
-    Bold the best value per column automatically.
-    """
     metrics   = ["f1_pa", "auc_pr", "precision", "recall"]
     col_names = ["F1-PA", "AUC-PR", "Precision", "Recall"]
     variants  = list(agg.keys())
 
-    # Find best per metric
     best = {}
     for m in metrics:
         best[m] = max(agg[v][m]["mean"] for v in variants)
@@ -200,7 +179,6 @@ def generate_latex_table(agg, dataset_name):
 def main():
     args = parse_args()
 
-    # Base overrides
     overrides = list(args.override or [])
     if args.dataset:
         overrides.append(f"data.dataset={args.dataset}")
@@ -212,26 +190,22 @@ def main():
     results_dir  = os.path.join("results", "ablations", dataset_name)
     os.makedirs(results_dir, exist_ok=True)
 
-    # Get all 6 ablation configs — applies alpha overrides per variant
     ablation_cfgs = get_ablation_configs(args.config)
 
-    # Apply base overrides on top of each ablation config
     if overrides:
         for name in ablation_cfgs:
             for ov in overrides:
                 from configs.config_loader import _apply_override
                 _apply_override(ablation_cfgs[name], ov)
 
-    # Filter to requested variants only
     if args.variants:
         ablation_cfgs = {k: v for k, v in ablation_cfgs.items() if k in args.variants}
 
-    print(f"\nRC-TGAD — ABLATION SUITE")
+    print(f"\nRC-TGAD — ABLATION SUITE (PAPER READY)")
     print(f"Dataset   : {dataset_name}")
     print(f"Variants  : {len(ablation_cfgs)}")
     print(f"Seeds     : {args.seeds}")
     print(f"Epochs    : {base_cfg['training']['epochs']}")
-    print(f"Mock mode : {args.mock}")
     print(f"Results   : {results_dir}")
     print(f"\nVariants to run:")
     for i, name in enumerate(ablation_cfgs):
@@ -240,7 +214,6 @@ def main():
         enabled = cfg['curriculum']['enabled']
         print(f"  {i+1}. {name:<38} curriculum={str(enabled):<5} α=({a1:.2f},{a2:.2f},{a3:.2f})")
 
-    # ── Run all variants × all seeds ─────────────────────────────────────────
     tracker    = AblationTracker()
     all_agg    = {}
     total_runs = len(ablation_cfgs) * len(args.seeds)
@@ -263,15 +236,13 @@ def main():
             print(f"  Done in {elapsed:.1f}s  |  "
                   f"F1-PA={result['f1_pa']:.4f}  AUC-PR={result['auc_pr']:.4f}")
 
-        # Add to tracker (for pretty summary table)
         for result in variant_results:
             tracker.add(
                 variant_name,
-                [result["f1_pa"]],   # tracker expects score arrays
-                [1]                  # dummy — we pass pre-computed metrics directly
+                [result["f1_pa"]],
+                [1] 
             )
 
-        # Aggregate this variant
         all_agg[variant_name] = {
             metric: {
                 "mean": float(np.mean([r[metric] for r in variant_results])),
@@ -281,11 +252,9 @@ def main():
             for metric in ["f1_pa", "auc_pr", "auc_roc", "precision", "recall"]
         }
 
-    # ── Final summary ─────────────────────────────────────────────────────────
     total_time = time.time() - t_total
     print(f"\n\nAll {total_runs} runs complete in {total_time/60:.1f} minutes")
 
-    # Clean summary table
     print(f"\n{'='*75}")
     print(f"  ABLATION RESULTS  —  {dataset_name.upper()}  ({len(args.seeds)} seeds)")
     print(f"{'='*75}")
@@ -301,23 +270,16 @@ def main():
         print(f"  {variant:<38} {f1:.4f}±{f1s:.4f}  {ap:.4f}  {prec:.4f}  {rec:.4f}")
 
     print(f"{'='*75}")
-    print(f"  Primary metrics: F1-PA and AUC-PR")
-
-    # Save aggregate JSON
+    
     agg_path = os.path.join(results_dir, "aggregate.json")
     with open(agg_path, "w") as f:
         json.dump(all_agg, f, indent=2)
-    print(f"\n  Aggregate saved: {agg_path}")
 
-    # Save LaTeX table
     latex   = generate_latex_table(all_agg, dataset_name)
     tex_path = os.path.join(results_dir, "paper_table.tex")
     with open(tex_path, "w") as f:
         f.write(latex)
-    print(f"  LaTeX table saved: {tex_path}")
-    print(f"\n  Paste this into your paper:")
-    print(f"\n{latex}\n")
-
+    print(f"\n  LaTeX table saved: {tex_path}")
 
 if __name__ == "__main__":
     main()
