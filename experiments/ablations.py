@@ -240,8 +240,8 @@ def main():
         for result in variant_results:
             tracker.add(
                 variant_name,
-                f1_list=[result["f1_pa"]],
-                auc_list=[result["auc_pr"]] # Ensure your tracker.add takes this arg
+                [result["f1_pa"]],
+                [result["auc_pr"]] 
             )
 
         all_agg[variant_name] = {
