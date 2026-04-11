@@ -123,7 +123,7 @@ def run_variant_seed(variant_name, cfg, seed, mock, results_dir):
 
     history = trainer.train(val_dataset=val_data, save_dir=variant_dir)
 
-    test_results = evaluate_on_test(backbone, test_data, cfg, device)
+    test_results = evaluate_on_test(backbone, test_data, cfg, device, val_dataset=val_data)
 
     with open(result_path, "w") as f:
         json.dump({**test_results, "history": history}, f, indent=2)
