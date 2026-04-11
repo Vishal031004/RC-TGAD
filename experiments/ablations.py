@@ -236,11 +236,12 @@ def main():
             print(f"  Done in {elapsed:.1f}s  |  "
                   f"F1-PA={result['f1_pa']:.4f}  AUC-PR={result['auc_pr']:.4f}")
 
+        # 🛡️ FIX: Pass ACTUAL results to the tracker
         for result in variant_results:
             tracker.add(
                 variant_name,
-                [result["f1_pa"]],
-                [1] 
+                f1_list=[result["f1_pa"]],
+                auc_list=[result["auc_pr"]] # Ensure your tracker.add takes this arg
             )
 
         all_agg[variant_name] = {
