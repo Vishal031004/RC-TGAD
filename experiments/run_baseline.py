@@ -198,7 +198,7 @@ def evaluate_on_test(backbone, test_dataset, cfg, device, val_dataset=None) -> d
             c, loc, scale = genpareto.fit(peaks, floc=0)
             
             # 3. Calculate rigorous POT threshold (Risk q = 1e-3)
-            q = 1e-3
+            q = 0.05
             N = len(smoothed_val)
             Nt = len(peaks)
             
