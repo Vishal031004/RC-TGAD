@@ -1,13 +1,18 @@
 """
 rag_scorer.py — Unified entry point for RAG hardness scoring.
 FIXED: Interface B alignment, causal ordering, and Memory Sliding Window.
+FIXED: Thread-safe locking for Multi-Threaded Trainer compatibility.
 """
 
 import torch
 import numpy as np
-from typing import Tuple, Optional, List
+import threading
+from typing import Tuple, Optional, List, Union
 from rag.vector_store import VectorStore
 from rag.hardness import compute_h_temp, compute_h_struct, compute_h_rag
+
+# 🛡️ THREAD LOCK: Prevents FAISS Segmentation Faults during multi-threading
+_scorer_lock = threading.Lock()
 
 def score_hardness(
     z: torch.Tensor,
@@ -23,36 +28,44 @@ def score_hardness(
     k_neighbors: int = 10,
     gamma: float = 0.5,
     anomaly_source_id: Optional[int] = None,
+    return_components: bool = False,  # Set to True later for IEEE scatter plots
     **kwargs # Accept extra args from Trainer gracefully
-) -> float:
+) -> Union[float, Tuple[float, float, float, float]]:
     alpha_1, alpha_2, alpha_3 = alphas
 
-    # 1. Compute H_temp using CURRENT history
+    # 1. Compute H_temp using CURRENT history (Thread-safe read)
     h_temp = compute_h_temp(x, x_hat, window_errors)
     
-    # 2. Append error AFTER calculating h_temp to prevent lookahead bias
+    # 2. Calculate error magnitude
     e = torch.norm(x - x_hat, p=2).item()
-    window_errors.append(e)
     
-    # 🛡️ FIX: Memory Sliding Window to prevent stale normalization logic
-    if len(window_errors) > 10000:
-        window_errors.pop(0)
-
-    # 3. H_struct
+    # 3. H_struct (Math only, thread-safe)
     h_struct = compute_h_struct(node_id, graph, anomaly_source_id, gamma)
 
-    # 4. H_RAG (Normalizes internally)
-    h_rag = compute_h_rag(z, vector_store, k=k_neighbors)
+    # 🚦 ACQUIRE LOCK: Protect FAISS and List operations from concurrent collisions
+    with _scorer_lock:
+        # 4. H_RAG (Normalizes internally, searches FAISS)
+        h_rag = compute_h_rag(z, vector_store, k=k_neighbors)
 
-    # 5. Composite score
-    H = alpha_1 * h_temp + alpha_2 * h_struct + alpha_3 * h_rag
+        # 5. Safely modify the sliding window memory
+        window_errors.append(e)
+        if len(window_errors) > 10000:
+            window_errors.pop(0)
 
-    # 6. Normalize and ADD to store for future retrievals
-    z_np = z.detach().cpu().numpy() if hasattr(z, "detach") else np.asarray(z)
-    norm = np.linalg.norm(z_np)
-    if norm > 1e-8:
-        z_np = z_np / norm
-    
-    vector_store.add(z_np, label=ground_truth_label)
+        # 6. Composite score
+        H = alpha_1 * h_temp + alpha_2 * h_struct + alpha_3 * h_rag
+        H_clipped = float(np.clip(H, 0.0, 1.0))
 
-    return float(np.clip(H, 0.0, 1.0))
+        # 7. Normalize and ADD to store safely
+        z_np = z.detach().cpu().numpy() if hasattr(z, "detach") else np.asarray(z)
+        norm = np.linalg.norm(z_np)
+        if norm > 1e-8:
+            z_np = z_np / norm
+        
+        vector_store.add(z_np, label=ground_truth_label)
+
+    # Return full tuple for paper scatter plots, or float for standard training
+    if return_components:
+        return H_clipped, h_temp, h_struct, h_rag
+        
+    return H_clipped
