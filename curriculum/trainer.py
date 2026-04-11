@@ -2,14 +2,19 @@
 trainer.py — Unified Training Loop for RC-TGAD.
 Refactored for Unified Processing Unit [B, N, W, 1].
 Includes DataParallel Graph-Wrapper Fix to prevent silent deadlocks.
+Includes AMP (Mixed Precision) and Multi-threading for maximum GPU/CPU utilization.
+Includes explicit Garbage Collection to prevent Kaggle RAM spikes.
 """
 
 import os
 import time
+import gc
 import numpy as np
 import torch
 import torch.nn as nn
 from typing import Dict, List, Tuple, Optional
+from concurrent.futures import ThreadPoolExecutor
+
 from curriculum.scheduler import get_batch_fast, pacing
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -60,7 +65,8 @@ class Trainer:
         dataset,
         config: Dict,
         use_curriculum: bool = True,
-        device: str = "cuda" if torch.cuda.is_available() else "cpu"
+        device: str = "cuda" if torch.cuda.is_available() else "cpu",
+        logger=None  # 🛡️ IEEE PAPER LOGGER
     ):
         self.raw_backbone   = backbone
         self.backbone       = backbone.to(device)
@@ -74,6 +80,7 @@ class Trainer:
         self.config         = config
         self.use_curriculum = use_curriculum
         self.device         = device
+        self.logger         = logger
 
         self.optimizer = torch.optim.Adam(
             self.backbone.parameters(),
@@ -90,7 +97,7 @@ class Trainer:
 
     @torch.no_grad()
     def _compute_hardness_from_loss(self) -> np.ndarray:
-        print("\n[Trainer] Computing hardness scores...")
+        print("\n[Trainer] Computing hardness scores (Multi-threaded)...")
         self.backbone.eval()
         ds = self.dataset
         n_timesteps = len(ds)
@@ -112,7 +119,7 @@ class Trainer:
             
             z_all, x_hat_all = self.backbone(x, graph_safe) 
             
-            # 🛡️ FIX 1: Target the FUTURE step
+            # Target the FUTURE step
             target = torch.stack([
                 torch.tensor(ds.signals[d["t"]], dtype=torch.float32) 
                 for d in batch_data
@@ -123,22 +130,33 @@ class Trainer:
             target_cpu = target.cpu()
 
             B_real = x.shape[0]
-            for b in range(B_real):
-                t = batch_data[b]["t"]
-                t_base_idx = (t - ds.window) // getattr(ds, 'stride', 1)
+            
+            # ⚡ TURBO FIX 1: Multi-threading to un-choke the CPU
+            def compute_single_node(b, n, t, global_idx):
+                h = self.rag_scorer.score_hardness(
+                    z=z_all_cpu[b, n],
+                    x=target_cpu[b, n],
+                    x_hat=x_hat_all_cpu[b, n],
+                    node_id=n,
+                    graph=batch_data[0]["graph"],
+                    t=t,
+                    ground_truth_label=int(y[b, n])
+                )
+                return global_idx, h
+
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                futures = []
+                for b in range(B_real):
+                    t = batch_data[b]["t"]
+                    t_base_idx = (t - ds.window) // getattr(ds, 'stride', 1)
+                    
+                    for n in range(N):
+                        global_idx = t_base_idx * N + n
+                        futures.append(executor.submit(compute_single_node, b, n, t, global_idx))
                 
-                for n in range(N):
-                    global_idx = t_base_idx * N + n
-                    h = self.rag_scorer.score_hardness(
-                        z=z_all_cpu[b, n],
-                        x=target_cpu[b, n],
-                        x_hat=x_hat_all_cpu[b, n],
-                        node_id=n,
-                        graph=batch_data[0]["graph"],
-                        t=t,
-                        ground_truth_label=int(y[b, n])
-                    )
-                    all_scores[global_idx] = h
+                for future in futures:
+                    g_idx, h_val = future.result()
+                    all_scores[g_idx] = h_val
             
             pbar.update(B_real)
             
@@ -155,6 +173,10 @@ class Trainer:
         return all_scores
 
     def _train_epoch(self, indices, batch_size: int) -> float:
+        # ⚡ TURBO FIX 2: Automatic Mixed Precision (AMP)
+        from torch.cuda.amp import autocast, GradScaler
+        scaler = GradScaler()
+        
         self.backbone.train()
         total_loss = 0.0
         n_steps = 0
@@ -183,31 +205,37 @@ class Trainer:
             graph_safe = DPGraphWrapper(batch_data[0]["graph"])
             
             self.optimizer.zero_grad()
-            z_all, x_hat_all = self.backbone(x, graph_safe)
             
-            # 🛡️ FIX 2: Target the FUTURE step
-            target = torch.stack([
-                torch.tensor(ds.signals[d["t"]], dtype=torch.float32) 
-                for d in batch_data
-            ]).unsqueeze(-1).to(self.device)
+            # Run forward pass in 16-bit to double GPU speed
+            with autocast():
+                z_all, x_hat_all = self.backbone(x, graph_safe)
+                
+                target = torch.stack([
+                    torch.tensor(ds.signals[d["t"]], dtype=torch.float32) 
+                    for d in batch_data
+                ]).unsqueeze(-1).to(self.device)
+                
+                if is_full_dataset:
+                    loss = nn.MSELoss()(x_hat_all, target)
+                else:
+                    loss = 0.0
+                    nodes_count = 0
+                    for b, t_idx in enumerate(current_t_batch):
+                        selected_nodes = t_groups[t_idx]
+                        if len(selected_nodes) > 0:
+                            loss += nn.MSELoss()(x_hat_all[b, selected_nodes], target[b, selected_nodes])
+                            nodes_count += 1
+                    if nodes_count > 0:
+                        loss = loss / nodes_count
             
-            if is_full_dataset:
-                loss = nn.MSELoss()(x_hat_all, target)
-            else:
-                loss = 0.0
-                nodes_count = 0
-                for b, t_idx in enumerate(current_t_batch):
-                    selected_nodes = t_groups[t_idx]
-                    if len(selected_nodes) > 0:
-                        loss += nn.MSELoss()(x_hat_all[b, selected_nodes], target[b, selected_nodes])
-                        nodes_count += 1
-                if nodes_count > 0:
-                    loss = loss / nodes_count
-            
+            # Safely scale gradients back up for backward pass
             if isinstance(loss, torch.Tensor):
-                loss.backward()
+                scaler.scale(loss).backward()
+                scaler.unscale_(self.optimizer)
                 torch.nn.utils.clip_grad_norm_(self.backbone.parameters(), 1.0)
-                self.optimizer.step()
+                scaler.step(self.optimizer)
+                scaler.update()
+                
                 total_loss += loss.item()
                 n_steps += 1
 
@@ -232,13 +260,11 @@ class Trainer:
             graph_safe = DPGraphWrapper(batch_data[0]["graph"])
             _, x_hat = self.backbone(x, graph_safe)
             
-            # 🛡️ FIX 3: Target the FUTURE step
             target = torch.stack([
                 torch.tensor(val_dataset.signals[d["t"]], dtype=torch.float32) 
                 for d in batch_data
             ]).unsqueeze(-1).to(self.device)
             
-            # 🛡️ FIX 4: System-Level Aggregation (Take worst sensor as factory score)
             node_scores = torch.norm(x_hat.view(x_hat.shape[0], x_hat.shape[1], -1) - target.view(target.shape[0], target.shape[1], -1), dim=-1)
             system_scores = node_scores.max(dim=1)[0]
             system_labels = y[:, 0]
@@ -268,6 +294,13 @@ class Trainer:
             
             if self.use_curriculum:
                 indices = get_batch_fast(hardness_array, epoch, k_warmup)
+                
+                # 🛡️ IEEE LOGGER: Record pacing details
+                if self.logger:
+                    current_k = len(indices)
+                    max_hardness = float(np.max(hardness_array[indices])) if current_k > 0 else 0.0
+                    self.logger.log_curriculum_pacing(epoch, current_k, n_samples, max_hardness)
+
                 if epoch > 0 and epoch % 10 == 0:
                     hardness_array = self._compute_hardness_from_loss()
             else:
@@ -279,6 +312,19 @@ class Trainer:
             if val_dataset is not None and (epoch % 5 == 0 or epoch == epochs - 1):
                 f1, auc_pr = self._validate(val_dataset)
 
-            print(f"Epoch {epoch} | Loss: {train_loss:.4f} | F1: {f1:.4f} | Time: {time.time()-t_start:.1f}s")
+            epoch_time = time.time() - t_start
+            print(f"Epoch {epoch} | Loss: {train_loss:.4f} | F1: {f1:.4f} | Time: {epoch_time:.1f}s")
+
+            # 🛡️ IEEE LOGGER: Record epoch metrics
+            if self.logger:
+                self.logger.log_epoch(epoch, train_loss, f1, epoch_time)
+
+            # 🧹 CRASH PREVENTION: Clear memory actively before next cycle
+            try:
+                del indices
+            except NameError:
+                pass
+            gc.collect()
+            torch.cuda.empty_cache()
 
         return self.history
