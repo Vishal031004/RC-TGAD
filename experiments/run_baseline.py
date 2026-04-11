@@ -1,12 +1,6 @@
 # experiments/run_baseline.py
 # PERSON 3 — Baseline Experiment Runner
 # RC-TGAD: Runs the NO-CURRICULUM baseline (vanilla LSTM+GNN with no scheduling)
-#
-# MODES:
-#   Mock mode  (NOW)   : python experiments/run_baseline.py --mock
-#   Real mode  (Week2) : python experiments/run_baseline.py --config configs/default.yaml
-#
-# Runs 3 seeds, prints mean ± std, saves results to results/baseline/
 
 import os
 import sys
@@ -19,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from configs.config_loader import load_config
 from curriculum.trainer    import Trainer, MockBackbone, MockRAGScorer, MockTemporalGraphDataset
-from utils.metrics         import evaluate, AblationTracker
+from utils.metrics         import evaluate, AblationTracker, smooth_scores
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -29,15 +23,15 @@ from utils.metrics         import evaluate, AblationTracker
 def parse_args():
     parser = argparse.ArgumentParser(description="RC-TGAD Baseline Runner")
     parser.add_argument("--config",   type=str,  default="configs/default.yaml")
-    parser.add_argument("--mock",     action="store_true", help="Use mock data/model (no real dataset needed)")
+    parser.add_argument("--mock",     action="store_true", help="Use mock data/model")
     parser.add_argument("--seeds",    type=int,  nargs="+", default=[42, 43, 44])
-    parser.add_argument("--dataset",  type=str,  default=None, help="Override data.dataset in config")
+    parser.add_argument("--dataset",  type=str,  default=None)
     parser.add_argument("--override", type=str,  nargs="*", default=[])
     return parser.parse_args()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# DATASET LOADER
+# DATASET & MODEL LOADERS
 # ─────────────────────────────────────────────────────────────────────────────
 
 def load_dataset(cfg, seed, mock=False):
@@ -49,7 +43,6 @@ def load_dataset(cfg, seed, mock=False):
         test_data  = MockTemporalGraphDataset(n_nodes=10, T=200, window_size=win, d_in=d_in, seed=seed+200)
         return train_data, val_data, test_data
 
-    # ── REAL MODE ─────────────────────────────────────────────────────────────
     dataset_name = cfg["data"]["dataset"]
     win    = cfg["model"]["window_size"]
     stride = cfg["data"].get("stride", 1)
@@ -90,7 +83,6 @@ def load_dataset(cfg, seed, mock=False):
 
     return train_data, val_data, test_data
 
-
 def load_backbone(cfg, mock=False):
     if mock:
         return MockBackbone(
@@ -98,7 +90,6 @@ def load_backbone(cfg, mock=False):
             d_z=cfg["model"]["gnn_out_dim"],
             num_nodes=10   
         )
-    # ── REAL MODE ─────────────────────────────────────────────────────────────
     from backbone.backbone import Backbone
     return Backbone(
         d_in        = cfg["model"]["d_in"],         
@@ -111,25 +102,23 @@ def load_backbone(cfg, mock=False):
         dropout     = cfg["model"]["dropout"],        
     )
 
-
 def load_rag_scorer(cfg, mock=False):
     return MockRAGScorer()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# EVALUATION ON TEST SET
+# INFERENCE & EVALUATION WITH DYNAMIC THRESHOLDING
 # ─────────────────────────────────────────────────────────────────────────────
 
 @torch.no_grad()
-def evaluate_on_test(backbone, test_dataset, cfg, device) -> dict:
+def _run_inference(backbone, dataset, cfg, device):
+    """Helper function to run pure inference on any dataset split."""
     from collections import defaultdict
     from torch.utils.data import DataLoader
-
-    backbone.eval()
+    
     all_scores = []
     all_labels = []
 
-    # ───────────────── MOCK PATH ─────────────────
     if isinstance(backbone, MockBackbone):
         def mock_collate(batch):
             return {
@@ -140,14 +129,7 @@ def evaluate_on_test(backbone, test_dataset, cfg, device) -> dict:
                 "t": [b["t"] for b in batch],
                 "graph": None,
             }
-        loader = DataLoader(
-            test_dataset,
-            batch_size=64,
-            shuffle=False,
-            num_workers=0,
-            collate_fn=mock_collate,
-        )
-
+        loader = DataLoader(dataset, batch_size=64, shuffle=False, num_workers=0, collate_fn=mock_collate)
         for batch in loader:
             x_window = batch["x_window"].to(device, non_blocking=True)
             target   = batch["target"].to(device, non_blocking=True) 
@@ -156,19 +138,15 @@ def evaluate_on_test(backbone, test_dataset, cfg, device) -> dict:
             scores = torch.norm(x_hat_all - target, dim=1)
             all_scores.extend(scores.cpu().tolist())
             all_labels.extend(labels.tolist())
-
-    # ───────────────── REAL DATASET PATH ─────────────────
+            
     else:
         from curriculum.trainer import DPGraphWrapper
+        batch_size = cfg["training"].get("batch_size", 32) * 2 
+        n_samples = len(dataset)
         
-        print("\n[Evaluate] Running final test evaluation in batches to prevent OOM...")
-        
-        batch_size = cfg["training"].get("batch_size", 32) * 2  # Safe batched inference
-        n_test = len(test_dataset)
-        
-        for i in range(0, n_test, batch_size):
-            end_i = min(i + batch_size, n_test)
-            batch_data = [test_dataset[j] for j in range(i, end_i)]
+        for i in range(0, n_samples, batch_size):
+            end_i = min(i + batch_size, n_samples)
+            batch_data = [dataset[j] for j in range(i, end_i)]
             
             x = torch.stack([d["x"] for d in batch_data]).to(device)
             y = torch.stack([d["y"] for d in batch_data])
@@ -176,25 +154,50 @@ def evaluate_on_test(backbone, test_dataset, cfg, device) -> dict:
             graph_safe = DPGraphWrapper(batch_data[0]["graph"])
             _, x_hat = backbone(x, graph_safe)
             
-            # Target the FUTURE step
             target = torch.stack([
-                torch.tensor(test_dataset.signals[d["t"]], dtype=torch.float32) 
+                torch.tensor(dataset.signals[d["t"]], dtype=torch.float32) 
                 for d in batch_data
             ]).unsqueeze(-1).to(device)
             
-            # System-Level Aggregation (Take worst sensor as factory score)
             node_scores = torch.norm(
                 x_hat.view(x_hat.shape[0], x_hat.shape[1], -1) - 
                 target.view(target.shape[0], target.shape[1], -1), 
                 dim=-1
             )
-            system_scores = node_scores.max(dim=1)[0]
+            # 🛡️ FIX: Changed from max() to mean() to prevent single-sensor False Positives
+            system_scores = node_scores.mean(dim=1)
             system_labels = y[:, 0]
             
             all_scores.extend(system_scores.cpu().tolist())
             all_labels.extend(system_labels.tolist())
+            
+    return np.array(all_scores), np.array(all_labels)
 
-    return evaluate(all_scores, all_labels, verbose=False)
+
+@torch.no_grad()
+def evaluate_on_test(backbone, test_dataset, cfg, device, val_dataset=None) -> dict:
+    """Evaluates the model, using the validation set to dynamically set the threshold."""
+    
+    dynamic_threshold = None
+    
+    # 1. Sweep Validation Set to calculate Dynamic Threshold
+    if val_dataset is not None:
+        print("\n[Evaluate] Running inference on Validation Set for Dynamic Thresholding...")
+        val_scores, _ = _run_inference(backbone, val_dataset, cfg, device)
+        
+        # Smooth before finding max to ignore 1-second noise spikes
+        smoothed_val = smooth_scores(val_scores, window_size=10)
+        
+        val_max_error = np.max(smoothed_val)
+        dynamic_threshold = float(val_max_error * 1.05) # Adds a 5% safety buffer
+        print(f"[Evaluate] Validation Max Error: {val_max_error:.4f} | Dynamic Threshold (1.05x): {dynamic_threshold:.4f}")
+
+    # 2. Sweep Test Set
+    print("[Evaluate] Running inference on Test Set...")
+    test_scores, test_labels = _run_inference(backbone, test_dataset, cfg, device)
+
+    # 3. Calculate metrics using our dynamic cutoff
+    return evaluate(test_scores, test_labels, threshold=dynamic_threshold, verbose=False)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -245,7 +248,8 @@ def run_single_seed(cfg, seed, mock, results_dir):
     )
 
     print(f"\n[Baseline] Evaluating on test set (seed={seed})...")
-    test_results = evaluate_on_test(backbone, test_data, cfg, device)
+    # Passed val_data here to activate the thresholding
+    test_results = evaluate_on_test(backbone, test_data, cfg, device, val_dataset=val_data)
 
     print(f"\n  Test Results (seed={seed}):")
     print(f"    F1-PA    : {test_results['f1_pa']:.4f}")
@@ -313,7 +317,6 @@ def main():
     with open(agg_path, "w") as f:
         json.dump(agg, f, indent=2)
     print(f"\n  Saved to {agg_path}")
-
 
 if __name__ == "__main__":
     main()
