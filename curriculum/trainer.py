@@ -2,7 +2,7 @@
 trainer.py — Unified Training Loop for RC-TGAD.
 Refactored for Unified Processing Unit [B, N, W, 1].
 Includes DataParallel Graph-Wrapper Fix to prevent silent deadlocks.
-Includes AMP (Mixed Precision) and Multi-threading for maximum GPU/CPU utilization.
+Includes AMP (Mixed Precision) and Single-Threaded GPU optimization for maximum speed.
 Includes explicit Garbage Collection to prevent Kaggle RAM spikes.
 """
 
@@ -13,7 +13,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 from typing import Dict, List, Tuple, Optional
-from concurrent.futures import ThreadPoolExecutor
 
 from curriculum.scheduler import get_batch_fast, pacing
 
@@ -97,7 +96,8 @@ class Trainer:
 
     @torch.no_grad()
     def _compute_hardness_from_loss(self) -> np.ndarray:
-        print("\n[Trainer] Computing hardness scores (Multi-threaded)...")
+        # ⚡ UPDATED PRINT STATEMENT
+        print("\n[Trainer] Computing hardness scores (Single-threaded GPU)...")
         self.backbone.eval()
         ds = self.dataset
         n_timesteps = len(ds)
@@ -131,32 +131,26 @@ class Trainer:
 
             B_real = x.shape[0]
             
-            # ⚡ TURBO FIX 1: Multi-threading to un-choke the CPU
-            def compute_single_node(b, n, t, global_idx):
-                h = self.rag_scorer.score_hardness(
-                    z=z_all_cpu[b, n],
-                    x=target_cpu[b, n],
-                    x_hat=x_hat_all_cpu[b, n],
-                    node_id=n,
-                    graph=batch_data[0]["graph"],
-                    t=t,
-                    ground_truth_label=int(y[b, n])
-                )
-                return global_idx, h
-
-            with ThreadPoolExecutor(max_workers=8) as executor:
-                futures = []
-                for b in range(B_real):
-                    t = batch_data[b]["t"]
-                    t_base_idx = (t - ds.window) // getattr(ds, 'stride', 1)
-                    
-                    for n in range(N):
-                        global_idx = t_base_idx * N + n
-                        futures.append(executor.submit(compute_single_node, b, n, t, global_idx))
+            # ⚡ TURBO FIX 1: Pure PyTorch Single-Threaded Loop
+            # No threads = No deadlocks. The GPU handles the speed natively.
+            for b in range(B_real):
+                t = batch_data[b]["t"]
+                t_base_idx = (t - ds.window) // getattr(ds, 'stride', 1)
                 
-                for future in futures:
-                    g_idx, h_val = future.result()
-                    all_scores[g_idx] = h_val
+                for n in range(N):
+                    global_idx = t_base_idx * N + n
+                    
+                    h_val = self.rag_scorer.score_hardness(
+                        z=z_all_cpu[b, n],
+                        x=target_cpu[b, n],
+                        x_hat=x_hat_all_cpu[b, n],
+                        node_id=n,
+                        graph=batch_data[0]["graph"],
+                        t=t,
+                        ground_truth_label=int(y[b, n])
+                    )
+                    
+                    all_scores[global_idx] = h_val
             
             pbar.update(B_real)
             
