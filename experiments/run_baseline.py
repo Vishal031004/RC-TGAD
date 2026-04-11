@@ -194,7 +194,7 @@ def evaluate_on_test(backbone, test_dataset, cfg, device, val_dataset=None) -> d
         v_std = np.std(smoothed_val)
         
         # You can adjust '3' to '2' if you want even higher recall
-        dynamic_threshold = float(v_mean + (3 * v_std)) 
+        dynamic_threshold = float(v_mean + (5 * v_std)) 
         
         print(f"[Evaluate] Val Mean: {v_mean:.4f} | Val Std: {v_std:.4f}")
         print(f"[Evaluate] Statistical Threshold (Mean + 3σ): {dynamic_threshold:.4f}")
