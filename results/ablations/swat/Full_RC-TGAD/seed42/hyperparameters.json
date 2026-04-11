@@ -4,7 +4,7 @@
         "lstm_layers": 2,
         "gnn_out_dim": 64,
         "gnn_heads": 4,
-        "dropout": 0.1,
+        "dropout": 0.3,
         "window_size": 30,
         "d_in": 1,
         "num_nodes": 51
@@ -27,7 +27,7 @@
         "epochs": 50,
         "batch_size": 512,
         "lr": 0.001,
-        "weight_decay": 1e-05,
+        "weight_decay": 0.001,
         "grad_clip": 1.0,
         "device": "cuda",
         "seed": 42,
