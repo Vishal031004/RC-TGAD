@@ -212,15 +212,23 @@ class Trainer:
                 if is_full_dataset:
                     loss = nn.MSELoss()(x_hat_all, target)
                 else:
-                    loss = 0.0
-                    nodes_count = 0
+                    # ⚡ TURBO FIX 3: Vectorized Jagged Loss
+                    # We eliminate the 512 independent CPU loss calls.
+                    # Create a boolean mask to grab all valid nodes instantly.
+                    B_curr = len(current_t_batch)
+                    mask = torch.zeros((B_curr, N), dtype=torch.bool)
                     for b, t_idx in enumerate(current_t_batch):
-                        selected_nodes = t_groups[t_idx]
-                        if len(selected_nodes) > 0:
-                            loss += nn.MSELoss()(x_hat_all[b, selected_nodes], target[b, selected_nodes])
-                            nodes_count += 1
-                    if nodes_count > 0:
-                        loss = loss / nodes_count
+                        mask[b, t_groups[t_idx]] = True
+                        
+                    # Send mask to GPU and slice tensors in one C++ operation
+                    mask = mask.to(self.device)
+                    valid_x_hat = x_hat_all[mask]
+                    valid_target = target[mask]
+                    
+                    if valid_x_hat.numel() > 0:
+                        loss = nn.MSELoss()(valid_x_hat, valid_target)
+                    else:
+                        loss = torch.tensor(0.0, device=self.device, requires_grad=True)
             
             # Safely scale gradients back up for backward pass
             if isinstance(loss, torch.Tensor):
