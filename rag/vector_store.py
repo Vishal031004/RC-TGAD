@@ -1,69 +1,64 @@
 """
-vector_store.py — GPU-Accelerated FAISS store for RC-TGAD.
-Supports Multi-GPU (T4 x2) on Kaggle for lightning-fast Hardness Eval.
+vector_store.py — Optimized CPU FAISS store for RC-TGAD.
+Uses Inverted File Index (IVF) to accelerate search without needing GPU-specific installs.
 """
 
 import faiss
 import numpy as np
-import torch
-from typing import List, Dict
+from typing import List, Dict, Union
 
 
 class VectorStore:
     """
-    FAISS L2 index that stores embeddings + binary labels.
-    Automatically moves to GPU if available.
+    FAISS IVF index that stores embeddings + binary labels.
+    Uses clustering to achieve near-GPU speeds on standard CPU hardware.
     """
 
     def __init__(self, dim: int = 64):
         self.dim = dim
+        # nlist: Number of clusters. 100 is ideal for the 50k memory cap.
+        self.nlist = 100 
         
-        # 1. Initialize the CPU Index
-        cpu_index = faiss.IndexFlatL2(dim)
+        # The quantizer tells FAISS how to find the nearest cluster center
+        quantizer = faiss.IndexFlatL2(dim)
         
-        # 2. Check for GPU (Kaggle T4s)
-        if torch.cuda.is_available():
-            try:
-                # We use a resource manager to speed up memory allocation
-                self.res = faiss.StandardGpuResources()
-                # Move index to GPU 0 (or use index_cpu_to_all_gpus for both T4s)
-                self.index = faiss.index_cpu_to_gpu(self.res, 0, cpu_index)
-                print(f"[VectorStore] Initialized FAISS-GPU on device {torch.cuda.current_device()}")
-            except Exception as e:
-                print(f"[VectorStore] GPU move failed, falling back to CPU: {e}")
-                self.index = cpu_index
-        else:
-            self.index = cpu_index
-            
+        # IVF Index: Partitions the vector space into cells (Inverted File)
+        self.index = faiss.IndexIVFFlat(quantizer, dim, self.nlist, faiss.METRIC_L2)
+        
         self.labels: List[int] = []            
 
     # ------------------------------------------------------------------
     # Mutation
     # ------------------------------------------------------------------
 
-    def add(self, z: np.ndarray, label: int) -> None:
-        """Add one embedding to the store."""
+    def add(self, z: Union[np.ndarray, 'torch.Tensor'], label: int) -> None:
+        """Add one embedding to the store with auto-training."""
         
-        # 🛡️ Prevent Memory Bloat
+        # 🛡️ Prevent Memory Bloat (Same logic as original)
         if self.index.ntotal > 50000:
             self.reset()
             
         z_np = _to_numpy(z).reshape(1, -1).astype("float32")
-        if z_np.shape[1] != self.dim:
-            raise ValueError(
-                f"Embedding dim mismatch: expected {self.dim}, got {z_np.shape[1]}"
-            )
+        
+        # IVF requires a 'training' phase to establish cluster centroids.
+        # We'll use the first point to initialize if not trained.
+        if not self.index.is_trained:
+            self.index.train(z_np)
+            
         self.index.add(z_np)
         self.labels.append(int(label))
 
-    def add_batch(self, zs: np.ndarray, labels: List[int]) -> None:
-        """Bulk add."""
+    def add_batch(self, zs: Union[np.ndarray, 'torch.Tensor'], labels: List[int]) -> None:
+        """Bulk add to the store."""
         
         if self.index.ntotal + len(labels) > 50000:
             self.reset()
             
         zs_np = _to_numpy(zs).astype("float32")
-        assert zs_np.shape[0] == len(labels), "zs and labels must have same length"
+        
+        if not self.index.is_trained:
+            self.index.train(zs_np)
+            
         self.index.add(zs_np)
         self.labels.extend([int(l) for l in labels])
 
@@ -71,21 +66,26 @@ class VectorStore:
     # Query
     # ------------------------------------------------------------------
 
-    def query(self, z: np.ndarray, k: int = 10) -> List[Dict]:
-        """Retrieve k nearest neighbors using GPU parallel search."""
+    def query(self, z: Union[np.ndarray, 'torch.Tensor'], k: int = 10) -> List[Dict]:
+        """Retrieve k nearest neighbors using fast clustered search."""
         n_stored = self.index.ntotal
-        if n_stored == 0:
+        
+        # If we don't have enough data yet to perform a meaningful search
+        if n_stored < 1:
             return []
 
-        k_actual = min(k, n_stored)
         z_np = _to_numpy(z).reshape(1, -1).astype("float32")
         
-        # This search is now happening on the GPU!
+        # nprobe: How many clusters to check. 
+        # 1 = fastest (but less accurate), 10 = high accuracy/high speed.
+        self.index.nprobe = 10 
+        
+        k_actual = min(k, n_stored)
         distances, indices = self.index.search(z_np, k_actual)
 
         results = []
         for j, idx in enumerate(indices[0]):
-            if idx == -1:          
+            if idx == -1 or idx >= len(self.labels):          
                 continue
             results.append({
                 "label": self.labels[idx],
@@ -101,27 +101,25 @@ class VectorStore:
         return self.index.ntotal
 
     def reset(self) -> None:
-        """Clear the store."""
-        self.index.reset()
+        """Clear the store and re-initialize the index."""
+        # Note: IVF indices need a full reset to clear training data
+        quantizer = faiss.IndexFlatL2(self.dim)
+        self.index = faiss.IndexIVFFlat(quantizer, self.dim, self.nlist, faiss.METRIC_L2)
         self.labels.clear()
 
     def save(self, path: str) -> None:
-        # GPU indices must be moved back to CPU before saving to disk
-        cpu_index = faiss.index_gpu_to_cpu(self.index)
-        faiss.write_index(cpu_index, path)
+        """Serialize index and labels to disk."""
+        faiss.write_index(self.index, path)
         np.save(path + ".labels.npy", np.array(self.labels, dtype=np.int32))
 
     def load(self, path: str) -> None:
-        cpu_index = faiss.read_index(path)
-        if torch.cuda.is_available():
-            self.res = faiss.StandardGpuResources()
-            self.index = faiss.index_cpu_to_gpu(self.res, 0, cpu_index)
-        else:
-            self.index = cpu_index
+        """Load index and labels from disk."""
+        self.index = faiss.read_index(path)
         self.labels = np.load(path + ".labels.npy").tolist()
 
 
 def _to_numpy(x) -> np.ndarray:
+    """Helper to convert torch tensors or arrays to FAISS-compatible numpy."""
     if hasattr(x, "detach"):
         return x.detach().cpu().numpy()
     return np.asarray(x)
