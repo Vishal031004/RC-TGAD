@@ -266,7 +266,7 @@ class Trainer:
             ]).unsqueeze(-1).to(self.device)
             
             node_scores = torch.norm(x_hat.view(x_hat.shape[0], x_hat.shape[1], -1) - target.view(target.shape[0], target.shape[1], -1), dim=-1)
-            system_scores = node_scores.max(dim=1)[0]
+            system_scores = node_scores.mean(dim=1)
             system_labels = y[:, 0]
             
             all_scores.extend(system_scores.cpu().tolist())
