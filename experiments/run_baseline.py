@@ -176,27 +176,34 @@ def _run_inference(backbone, dataset, cfg, device):
 
 @torch.no_grad()
 def evaluate_on_test(backbone, test_dataset, cfg, device, val_dataset=None) -> dict:
-    """Evaluates the model, using the validation set to dynamically set the threshold."""
+    """Evaluates the model, using a Mean+Sigma distribution to set the threshold."""
     
     dynamic_threshold = None
     
-    # 1. Sweep Validation Set to calculate Dynamic Threshold
+    # 1. Sweep Validation Set to calculate Statistical Threshold
     if val_dataset is not None:
         print("\n[Evaluate] Running inference on Validation Set for Dynamic Thresholding...")
         val_scores, _ = _run_inference(backbone, val_dataset, cfg, device)
         
-        # Smooth before finding max to ignore 1-second noise spikes
+        # Smooth to ignore point-noise, then calculate distribution
         smoothed_val = smooth_scores(val_scores, window_size=10)
         
-        val_max_error = np.max(smoothed_val)
-        dynamic_threshold = float(val_max_error * 1.05) # Adds a 5% safety buffer
-        print(f"[Evaluate] Validation Max Error: {val_max_error:.4f} | Dynamic Threshold (1.05x): {dynamic_threshold:.4f}")
+        # ⚡ IEEE STANDARD: Mean + 3*Sigma (99.7% Confidence Interval)
+        # This is much more robust than 'Max' for high-precision papers.
+        v_mean = np.mean(smoothed_val)
+        v_std = np.std(smoothed_val)
+        
+        # You can adjust '3' to '2' if you want even higher recall
+        dynamic_threshold = float(v_mean + (3 * v_std)) 
+        
+        print(f"[Evaluate] Val Mean: {v_mean:.4f} | Val Std: {v_std:.4f}")
+        print(f"[Evaluate] Statistical Threshold (Mean + 3σ): {dynamic_threshold:.4f}")
 
     # 2. Sweep Test Set
     print("[Evaluate] Running inference on Test Set...")
     test_scores, test_labels = _run_inference(backbone, test_dataset, cfg, device)
 
-    # 3. Calculate metrics using our dynamic cutoff
+    # 3. Calculate metrics using our statistical cutoff
     return evaluate(test_scores, test_labels, threshold=dynamic_threshold, verbose=False)
 
 
