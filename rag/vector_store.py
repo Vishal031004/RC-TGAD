@@ -1,100 +1,77 @@
 """
-vector_store.py — FAISS-backed vector store for RC-TGAD (Person 2)
-FIXED: Memory Cap implemented to prevent OOM and stale distributions.
+vector_store.py — Pure PyTorch VRAM Vector Store.
+Bypasses FAISS entirely to eliminate CPU-GPU transfer bottlenecks.
 """
-
-import faiss
+import torch
 import numpy as np
-from typing import List, Dict
-
+from typing import List, Dict, Union
 
 class VectorStore:
-    """
-    FAISS L2 index that stores embeddings + binary labels (0=normal, 1=anomaly).
-    """
-
-    def __init__(self, dim: int = 64):
+    def __init__(self, dim: int = 64, max_capacity: int = 50000):
         self.dim = dim
-        self.index = faiss.IndexFlatL2(dim)   # exact L2 search
-        self.labels: List[int] = []            
-
-    # ------------------------------------------------------------------
-    # Mutation
-    # ------------------------------------------------------------------
-
-    def add(self, z: np.ndarray, label: int) -> None:
-        """Add one embedding to the store."""
+        self.max_capacity = max_capacity
+        # Force CUDA if available
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
-        # 🛡️ FIX: Prevent Memory Bloat and Stale Retrievals
-        if self.index.ntotal > 50000:
+        print(f"\n[VectorStore] 🚀 PURE PYTORCH VRAM BANK INITIALIZED ON {self.device.type.upper()}! 🚀\n")
+        
+        # Pre-allocate memory directly on the GPU
+        self.memory = torch.zeros((max_capacity, dim), device=self.device, dtype=torch.float32)
+        self.labels = torch.zeros(max_capacity, device=self.device, dtype=torch.long)
+        self.ptr = 0
+
+    def add(self, z: Union[np.ndarray, torch.Tensor], label: int) -> None:
+        """Add one embedding to the GPU store."""
+        if self.ptr >= self.max_capacity:
             self.reset()
             
-        z_np = _to_numpy(z).reshape(1, -1).astype("float32")
-        if z_np.shape[1] != self.dim:
-            raise ValueError(
-                f"Embedding dim mismatch: expected {self.dim}, got {z_np.shape[1]}"
-            )
-        self.index.add(z_np)
-        self.labels.append(int(label))
-
-    def add_batch(self, zs: np.ndarray, labels: List[int]) -> None:
-        """Bulk add — slightly faster than calling add() in a loop."""
-        
-        # 🛡️ FIX: Prevent Memory Bloat and Stale Retrievals
-        if self.index.ntotal + len(labels) > 50000:
-            self.reset()
+        # Ensure input is a tensor on the correct device
+        if not isinstance(z, torch.Tensor):
+            z = torch.tensor(z, dtype=torch.float32, device=self.device)
+        else:
+            z = z.to(self.device).float()
             
-        zs_np = _to_numpy(zs).astype("float32")
-        assert zs_np.shape[0] == len(labels), "zs and labels must have same length"
-        self.index.add(zs_np)
-        self.labels.extend([int(l) for l in labels])
+        self.memory[self.ptr] = z.view(-1)
+        self.labels[self.ptr] = int(label)
+        self.ptr += 1
 
-    # ------------------------------------------------------------------
-    # Query
-    # ------------------------------------------------------------------
-
-    def query(self, z: np.ndarray, k: int = 10) -> List[Dict]:
-        """Retrieve k nearest neighbors."""
-        n_stored = self.index.ntotal
-        if n_stored == 0:
+    def query(self, z: Union[np.ndarray, torch.Tensor], k: int = 10) -> List[Dict]:
+        """Retrieve k nearest neighbors using native GPU math."""
+        if self.ptr == 0: 
             return []
 
-        k_actual = min(k, n_stored)
-        z_np = _to_numpy(z).reshape(1, -1).astype("float32")
-        distances, indices = self.index.search(z_np, k_actual)
+        if not isinstance(z, torch.Tensor):
+            z = torch.tensor(z, dtype=torch.float32, device=self.device)
+        else:
+            z = z.to(self.device).float()
 
+        z = z.view(1, -1)
+        
+        # Slice only the valid memory
+        valid_memory = self.memory[:self.ptr]
+        
+        # Native PyTorch Euclidean distance (Runs instantly on GPU cores)
+        distances = torch.cdist(z, valid_memory) 
+        
+        k_actual = min(k, self.ptr)
+        topk_dist, topk_idx = torch.topk(distances, k_actual, largest=False, dim=1)
+
+        # Move only the final top-k answers to CPU for the logger
+        topk_dist = topk_dist[0].cpu().tolist()
+        topk_idx = topk_idx[0].cpu().tolist()
+        
         results = []
-        for j, idx in enumerate(indices[0]):
-            if idx == -1:          
-                continue
+        for j in range(k_actual):
+            idx = topk_idx[j]
             results.append({
-                "label": self.labels[idx],
-                "dist":  float(distances[0][j]),
+                "label": int(self.labels[idx].item()), 
+                "dist": float(topk_dist[j])
             })
         return results
 
-    # ------------------------------------------------------------------
-    # Utility
-    # ------------------------------------------------------------------
-
-    def __len__(self) -> int:
-        return self.index.ntotal
-
     def reset(self) -> None:
-        """Clear the store (useful between datasets / ablation runs)."""
-        self.index.reset()
-        self.labels.clear()
-
-    def save(self, path: str) -> None:
-        faiss.write_index(self.index, path)
-        np.save(path + ".labels.npy", np.array(self.labels, dtype=np.int32))
-
-    def load(self, path: str) -> None:
-        self.index = faiss.read_index(path)
-        self.labels = np.load(path + ".labels.npy").tolist()
-
-
-def _to_numpy(x) -> np.ndarray:
-    if hasattr(x, "detach"):
-        return x.detach().cpu().numpy()
-    return np.asarray(x)
+        """O(1) instant reset."""
+        self.ptr = 0
+        
+    def __len__(self) -> int:
+        return self.ptr
