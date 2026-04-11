@@ -86,6 +86,14 @@ class Trainer:
             lr=config.get("lr", 1e-3),
             weight_decay=config.get("weight_decay", 1e-5)
         )
+        
+        # ⚡ SOTA UPGRADE 1: Cosine Annealing Learning Rate
+        # Starts at 1e-3 and smoothly curves down to 1e-5 by epoch 50
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            self.optimizer, 
+            T_max=config.get("epochs", 50), 
+            eta_min=1e-5
+        )
 
         self.history = {
             "train_loss": [],
@@ -96,7 +104,6 @@ class Trainer:
 
     @torch.no_grad()
     def _compute_hardness_from_loss(self) -> np.ndarray:
-        # ⚡ UPDATED PRINT STATEMENT
         print("\n[Trainer] Computing hardness scores (Single-threaded GPU)...")
         self.backbone.eval()
         ds = self.dataset
@@ -132,7 +139,6 @@ class Trainer:
             B_real = x.shape[0]
             
             # ⚡ TURBO FIX 1: Pure PyTorch Single-Threaded Loop
-            # No threads = No deadlocks. The GPU handles the speed natively.
             for b in range(B_real):
                 t = batch_data[b]["t"]
                 t_base_idx = (t - ds.window) // getattr(ds, 'stride', 1)
@@ -200,7 +206,6 @@ class Trainer:
             
             self.optimizer.zero_grad()
             
-            # Run forward pass in 16-bit to double GPU speed
             with autocast():
                 z_all, x_hat_all = self.backbone(x, graph_safe)
                 
@@ -213,14 +218,11 @@ class Trainer:
                     loss = nn.MSELoss()(x_hat_all, target)
                 else:
                     # ⚡ TURBO FIX 3: Vectorized Jagged Loss
-                    # We eliminate the 512 independent CPU loss calls.
-                    # Create a boolean mask to grab all valid nodes instantly.
                     B_curr = len(current_t_batch)
                     mask = torch.zeros((B_curr, N), dtype=torch.bool)
                     for b, t_idx in enumerate(current_t_batch):
                         mask[b, t_groups[t_idx]] = True
                         
-                    # Send mask to GPU and slice tensors in one C++ operation
                     mask = mask.to(self.device)
                     valid_x_hat = x_hat_all[mask]
                     valid_target = target[mask]
@@ -230,7 +232,6 @@ class Trainer:
                     else:
                         loss = torch.tensor(0.0, device=self.device, requires_grad=True)
             
-            # Safely scale gradients back up for backward pass
             if isinstance(loss, torch.Tensor):
                 scaler.scale(loss).backward()
                 scaler.unscale_(self.optimizer)
@@ -309,6 +310,9 @@ class Trainer:
                 indices = np.arange(n_samples)
 
             train_loss = self._train_epoch(indices, batch_size)
+            
+            # ⚡ STEP THE SCHEDULER
+            self.scheduler.step()
             
             f1, auc_pr = 0.0, 0.0
             if val_dataset is not None and (epoch % 5 == 0 or epoch == epochs - 1):
