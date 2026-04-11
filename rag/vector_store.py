@@ -68,3 +68,25 @@ class VectorStore:
         
     def __len__(self) -> int:
         return self.ptr
+
+
+    # ------------------------------------------------------------------
+    # Utility (Safe PyTorch Save/Load)
+    # ------------------------------------------------------------------
+    def save(self, path: str) -> None:
+        """Saves the GPU memory bank safely to the hard drive."""
+        torch.save({
+            'memory': self.memory[:self.ptr].cpu(),
+            'labels': self.labels[:self.ptr].cpu(),
+            'ptr': self.ptr,
+            'dim': self.dim
+        }, path + ".pt")
+
+    def load(self, path: str) -> None:
+        """Loads a saved memory bank directly back into the GPU."""
+        data = torch.load(path + ".pt", map_location=self.device)
+        self.ptr = data['ptr']
+        self.dim = data['dim']
+        self.memory[:self.ptr] = data['memory'].to(self.device)
+        self.labels[:self.ptr] = data['labels'].to(self.device)
+
