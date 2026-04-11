@@ -8,6 +8,7 @@ import json
 import argparse
 import numpy as np
 import torch
+from scipy.stats import genpareto  # ⚡ SOTA UPGRADE: Import for Extreme Value Theory
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -176,7 +177,7 @@ def _run_inference(backbone, dataset, cfg, device):
 
 @torch.no_grad()
 def evaluate_on_test(backbone, test_dataset, cfg, device, val_dataset=None) -> dict:
-    """Evaluates the model, using a Mean+Sigma distribution to set the threshold."""
+    """Evaluates the model, using POT (Extreme Value Theory) to dynamically set the threshold."""
     
     dynamic_threshold = None
     
@@ -185,19 +186,32 @@ def evaluate_on_test(backbone, test_dataset, cfg, device, val_dataset=None) -> d
         print("\n[Evaluate] Running inference on Validation Set for Dynamic Thresholding...")
         val_scores, _ = _run_inference(backbone, val_dataset, cfg, device)
         
-        # Smooth to ignore point-noise, then calculate distribution
+        # ⚡ SOTA UPGRADE 2: Peak-Over-Threshold (Extreme Value Theory)
         smoothed_val = smooth_scores(val_scores, window_size=10)
         
-        # ⚡ IEEE STANDARD: Mean + 3*Sigma (99.7% Confidence Interval)
-        # This is much more robust than 'Max' for high-precision papers.
-        v_mean = np.mean(smoothed_val)
-        v_std = np.std(smoothed_val)
+        # 1. Find empirical base threshold (95th percentile)
+        t_base = np.percentile(smoothed_val, 95)
+        peaks = smoothed_val[smoothed_val > t_base] - t_base
         
-        # You can adjust '3' to '2' if you want even higher recall
-        dynamic_threshold = float(v_mean + (5 * v_std)) 
-        
-        print(f"[Evaluate] Val Mean: {v_mean:.4f} | Val Std: {v_std:.4f}")
-        print(f"[Evaluate] Statistical Threshold (Mean + 3σ): {dynamic_threshold:.4f}")
+        try:
+            # 2. Fit Generalized Pareto Distribution (GPD) to the tail
+            c, loc, scale = genpareto.fit(peaks, floc=0)
+            
+            # 3. Calculate rigorous POT threshold (Risk q = 1e-3)
+            q = 1e-3
+            N = len(smoothed_val)
+            Nt = len(peaks)
+            
+            # The official EVT threshold formula:
+            pot_threshold = t_base + (scale / c) * (((q * N / Nt) ** (-c)) - 1)
+            dynamic_threshold = float(pot_threshold)
+            
+            print(f"[Evaluate] POT Base: {t_base:.4f} | Final POT Threshold: {dynamic_threshold:.4f}")
+            
+        except Exception as e:
+            # Fallback just in case the math throws an infinity error on Kaggle
+            print(f"[Evaluate] POT fit failed ({e}), falling back to 4-Sigma")
+            dynamic_threshold = float(np.mean(smoothed_val) + (4 * np.std(smoothed_val)))
 
     # 2. Sweep Test Set
     print("[Evaluate] Running inference on Test Set...")
