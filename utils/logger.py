@@ -58,20 +58,23 @@ class DeepResearchLogger:
             csv.writer(f).writerow([epoch, f"{loss:.6f}", f"{val_f1:.4f}", f"{time_sec:.2f}"])
 
     def log_curriculum_update(self, epoch, h_temp, h_struct, h_rag, h_total, current_k, total_n):
-        """Saves the exact math for paper scatter plots and logs the pacing event."""
         percentage = (current_k / total_n) * 100
-        self.log_event(f"🔄 Curriculum Sorted: Unlocked {current_k}/{total_n} samples ({percentage:.1f}%)")
+        self.log_event(f"📈 [Curriculum Update] Epoch {epoch} | Unlocked {current_k}/{total_n} samples ({percentage:.1f}%) | Max Hardness: {float(np.max(h_total)):.4f}")
         
+        # 🛡️ SAFETY: Move to CPU and convert to numpy once to prevent VRAM leakage
+        h_temp_np = h_temp.detach().cpu().numpy() if torch.is_tensor(h_temp) else h_temp
+        h_struct_np = h_struct.detach().cpu().numpy() if torch.is_tensor(h_struct) else h_struct
+        h_rag_np = h_rag.detach().cpu().numpy() if torch.is_tensor(h_rag) else h_rag
+        h_total_np = h_total.detach().cpu().numpy() if torch.is_tensor(h_total) else h_total
+
         with open(self.scores_csv, 'a', newline='') as f:
             writer = csv.writer(f)
-            # We log every 10th sample to save Kaggle disk space, which is still 42,000 points per update!
-            # Perfect for a dense scatter plot.
-            for idx in range(0, len(h_total), 10): 
+            for idx in range(0, len(h_total_np), 10): 
                 writer.writerow([
                     epoch, 
                     idx, 
-                    f"{float(h_temp[idx]):.4f}", 
-                    f"{float(h_struct[idx]):.4f}", 
-                    f"{float(h_rag[idx]):.4f}", 
-                    f"{float(h_total[idx]):.4f}"
+                    f"{float(h_temp_np[idx]):.4f}", 
+                    f"{float(h_struct_np[idx]):.4f}", 
+                    f"{float(h_rag_np[idx]):.4f}", 
+                    f"{float(h_total_np[idx]):.4f}"
                 ])
