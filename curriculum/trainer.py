@@ -95,7 +95,7 @@ class Trainer:
         }
 
     @torch.no_grad()
-    def _compute_hardness_from_loss(self) -> np.ndarray:
+    def _compute_hardness_from_loss(self, current_epoch: int = 0) -> np.ndarray:
         # ⚡ UPDATED PRINT STATEMENT
         print("\n[Trainer] Computing hardness scores (Single-threaded GPU)...")        
         self.backbone.eval()
