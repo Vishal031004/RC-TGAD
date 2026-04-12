@@ -97,7 +97,7 @@ class Trainer:
     @torch.no_grad()
     def _compute_hardness_from_loss(self) -> np.ndarray:
         # ⚡ UPDATED PRINT STATEMENT
-        print("\n[Trainer] Computing hardness scores (Single-threaded GPU)...")
+        print("\n[Trainer] Computing hardness scores (Single-threaded GPU)...")        
         self.backbone.eval()
         ds = self.dataset
         n_timesteps = len(ds)
@@ -105,6 +105,7 @@ class Trainer:
         batch_size = self.config.get("batch_size", 32) * 2 
         
         all_scores = np.zeros(n_timesteps * N, dtype=np.float32)
+        detailed_scores = [] # ⚡ Holds the data for the Bulk Write
         
         from tqdm import tqdm
         pbar = tqdm(total=n_timesteps, desc="Hardness Eval", unit="steps")
@@ -140,7 +141,7 @@ class Trainer:
                 for n in range(N):
                     global_idx = t_base_idx * N + n
                     
-                    h_val = self.rag_scorer.score_hardness(
+                    h_result = self.rag_scorer.score_hardness(
                         z=z_all_cpu[b, n],
                         x=target_cpu[b, n],
                         x_hat=x_hat_all_cpu[b, n],
@@ -150,11 +151,32 @@ class Trainer:
                         ground_truth_label=int(y[b, n])
                     )
                     
-                    all_scores[global_idx] = h_val
+                    # ⚡ Check if the scorer returned a dictionary of parts or just the total float
+                    if isinstance(h_result, dict):
+                        h_total = h_result.get("total", 0.0)
+                        h_temp = h_result.get("temp", 0.0)
+                        h_struct = h_result.get("struct", 0.0)
+                        h_rag = h_result.get("rag", 0.0)
+                    else:
+                        h_total = float(h_result)
+                        h_temp, h_struct, h_rag = 0.0, 0.0, 0.0 # Fallback
+                        
+                    all_scores[global_idx] = h_total
+                    
+                    # Store for bulk logging
+                    if self.logger:
+                        detailed_scores.append([
+                            current_epoch, global_idx, 
+                            round(h_temp, 4), round(h_struct, 4), round(h_rag, 4), round(h_total, 4)
+                        ])
             
             pbar.update(B_real)
             
         pbar.close()
+
+        # ⚡ Execute the lightning-fast bulk write to the CSV
+        if self.logger and detailed_scores:
+            self.logger.log_curriculum_scores(detailed_scores)
 
         score_min, score_max = all_scores.min(), all_scores.max()
         score_range = score_max - score_min
