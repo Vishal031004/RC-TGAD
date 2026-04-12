@@ -1,0 +1,306 @@
+🗑️ Old results cleared! No more skipping.
+[Config] Override: data.data_dir = /kaggle/input/datasets/vishalp030303/swat-raw/
+[Config] Override: training.epochs = 50
+[Config] Override: training.batch_size = 128
+[Config] Override: training.weight_decay = 0.001
+[Config] Override: model.dropout = 0.3
+[Config] Override: model.window_size = 75
+[Config] Override: model.lstm_hidden = 128
+[Config] Override: model.gnn_heads = 4
+[Config] Override: model.gnn_out_dim = 128
+[Config] Override: rag.vector_dim = 128
+[Config] Override: rag.alpha_1 = 0.34
+[Config] Override: rag.alpha_2 = 0.33
+[Config] Override: rag.alpha_3 = 0.33
+[Config] Override: data.dataset = swat
+[Config] Override: curriculum.enabled = False
+[Config] Override: curriculum.enabled = True
+[Config] Override: rag.alpha_1 = 0.33
+[Config] Override: rag.alpha_2 = 0.33
+[Config] Override: rag.alpha_3 = 0.34
+[Config] Override: curriculum.enabled = True
+[Config] Override: rag.alpha_1 = 1.0
+[Config] Override: rag.alpha_2 = 0.0
+[Config] Override: rag.alpha_3 = 0.0
+[Config] Override: curriculum.enabled = True
+[Config] Override: rag.alpha_1 = 0.0
+[Config] Override: rag.alpha_2 = 1.0
+[Config] Override: rag.alpha_3 = 0.0
+[Config] Override: curriculum.enabled = True
+[Config] Override: rag.alpha_1 = 0.5
+[Config] Override: rag.alpha_2 = 0.5
+[Config] Override: rag.alpha_3 = 0.0
+[Config] Override: curriculum.enabled = True
+[Config] Override: rag.alpha_1 = 0.33
+[Config] Override: rag.alpha_2 = 0.33
+[Config] Override: rag.alpha_3 = 0.34
+[Config] Override: data.data_dir = /kaggle/input/datasets/vishalp030303/swat-raw/
+[Config] Override: training.epochs = 50
+[Config] Override: training.batch_size = 128
+[Config] Override: training.weight_decay = 0.001
+[Config] Override: model.dropout = 0.3
+[Config] Override: model.window_size = 75
+[Config] Override: model.lstm_hidden = 128
+[Config] Override: model.gnn_heads = 4
+[Config] Override: model.gnn_out_dim = 128
+[Config] Override: rag.vector_dim = 128
+[Config] Override: rag.alpha_1 = 0.34
+[Config] Override: rag.alpha_2 = 0.33
+[Config] Override: rag.alpha_3 = 0.33
+[Config] Override: data.dataset = swat
+[Config] Override: data.data_dir = /kaggle/input/datasets/vishalp030303/swat-raw/
+[Config] Override: training.epochs = 50
+[Config] Override: training.batch_size = 128
+[Config] Override: training.weight_decay = 0.001
+[Config] Override: model.dropout = 0.3
+[Config] Override: model.window_size = 75
+[Config] Override: model.lstm_hidden = 128
+[Config] Override: model.gnn_heads = 4
+[Config] Override: model.gnn_out_dim = 128
+[Config] Override: rag.vector_dim = 128
+[Config] Override: rag.alpha_1 = 0.34
+[Config] Override: rag.alpha_2 = 0.33
+[Config] Override: rag.alpha_3 = 0.33
+[Config] Override: data.dataset = swat
+[Config] Override: data.data_dir = /kaggle/input/datasets/vishalp030303/swat-raw/
+[Config] Override: training.epochs = 50
+[Config] Override: training.batch_size = 128
+[Config] Override: training.weight_decay = 0.001
+[Config] Override: model.dropout = 0.3
+[Config] Override: model.window_size = 75
+[Config] Override: model.lstm_hidden = 128
+[Config] Override: model.gnn_heads = 4
+[Config] Override: model.gnn_out_dim = 128
+[Config] Override: rag.vector_dim = 128
+[Config] Override: rag.alpha_1 = 0.34
+[Config] Override: rag.alpha_2 = 0.33
+[Config] Override: rag.alpha_3 = 0.33
+[Config] Override: data.dataset = swat
+[Config] Override: data.data_dir = /kaggle/input/datasets/vishalp030303/swat-raw/
+[Config] Override: training.epochs = 50
+[Config] Override: training.batch_size = 128
+[Config] Override: training.weight_decay = 0.001
+[Config] Override: model.dropout = 0.3
+[Config] Override: model.window_size = 75
+[Config] Override: model.lstm_hidden = 128
+[Config] Override: model.gnn_heads = 4
+[Config] Override: model.gnn_out_dim = 128
+[Config] Override: rag.vector_dim = 128
+[Config] Override: rag.alpha_1 = 0.34
+[Config] Override: rag.alpha_2 = 0.33
+[Config] Override: rag.alpha_3 = 0.33
+[Config] Override: data.dataset = swat
+[Config] Override: data.data_dir = /kaggle/input/datasets/vishalp030303/swat-raw/
+[Config] Override: training.epochs = 50
+[Config] Override: training.batch_size = 128
+[Config] Override: training.weight_decay = 0.001
+[Config] Override: model.dropout = 0.3
+[Config] Override: model.window_size = 75
+[Config] Override: model.lstm_hidden = 128
+[Config] Override: model.gnn_heads = 4
+[Config] Override: model.gnn_out_dim = 128
+[Config] Override: rag.vector_dim = 128
+[Config] Override: rag.alpha_1 = 0.34
+[Config] Override: rag.alpha_2 = 0.33
+[Config] Override: rag.alpha_3 = 0.33
+[Config] Override: data.dataset = swat
+[Config] Override: data.data_dir = /kaggle/input/datasets/vishalp030303/swat-raw/
+[Config] Override: training.epochs = 50
+[Config] Override: training.batch_size = 128
+[Config] Override: training.weight_decay = 0.001
+[Config] Override: model.dropout = 0.3
+[Config] Override: model.window_size = 75
+[Config] Override: model.lstm_hidden = 128
+[Config] Override: model.gnn_heads = 4
+[Config] Override: model.gnn_out_dim = 128
+[Config] Override: rag.vector_dim = 128
+[Config] Override: rag.alpha_1 = 0.34
+[Config] Override: rag.alpha_2 = 0.33
+[Config] Override: rag.alpha_3 = 0.33
+[Config] Override: data.dataset = swat
+
+RC-TGAD — ABLATION SUITE (PAPER READY)
+Dataset   : swat
+Variants  : 1
+Seeds     : [42]
+Epochs    : 50
+Results   : results/ablations/swat
+
+Variants to run:
+  1. Full RC-TGAD                           curriculum=True  α=(0.34,0.33,0.33)
+
+───────────────────────────────────────────────────────
+  Variant: Full RC-TGAD
+───────────────────────────────────────────────────────
+
+  [1/1] seed=42
+[2026-04-12 13:24:06] 🚀 Deep Research Logger Initialized.
+
+[SWaT Loader] Loading RAW Data | Val Ratio: 0.15
+🌊 Applying causal smoothing (Shifted Rolling Mean)...
+🧠 Filtering zero-variance features...
+Removed 0 dead sensors.
+⚖️ Applying Robust Scaling and Hard Clipping [-5, 5]...
+[Dataset] Train samples: 420,675
+[Dataset] Val samples:   74,175
+[Dataset] Test samples:  449,844
+
+[Dataset] Auto-detected num_nodes = 51
+[2026-04-12 13:24:43] 💾 Architecture details saved.
+[Trainer] Using 2 GPUs via DataParallel
+
+[Trainer] Computing hardness scores (Single-threaded GPU)...
+Hardness Eval: 100%|████████████████| 420675/420675 [11:28<00:00, 611.45steps/s]
+💾 [Logger] Bulk saved 21454425 hardness rows to curriculum_scores.csv
+
+[Trainer] Starting training...
+------------------------------------------------------------
+[2026-04-12 13:36:49] 📈 [Curriculum Update] Epoch 0 | Unlocked 6436327/21454425 samples (30.0%) | Max Hardness: 0.3001
+Epoch 00 | Loss: 0.0389 | Val AUC-PR: 0.0000 | Max Hardness: 0.3001 | Time: 206.8s
+[2026-04-12 13:40:16] 📈 [Curriculum Update] Epoch 1 | Unlocked 6436327/21454425 samples (30.0%) | Max Hardness: 0.3001
+Epoch 01 | Loss: 0.0076 | Val AUC-PR: 0.0000 | Max Hardness: 0.3001 | Time: 157.3s
+[2026-04-12 13:42:53] 📈 [Curriculum Update] Epoch 2 | Unlocked 1430025/21454425 samples (6.7%) | Max Hardness: 0.0667
+Epoch 02 | Loss: 0.0094 | Val AUC-PR: 0.0000 | Max Hardness: 0.0667 | Time: 145.4s
+[2026-04-12 13:45:19] 📈 [Curriculum Update] Epoch 3 | Unlocked 2144522/21454425 samples (10.0%) | Max Hardness: 0.1000
+Epoch 03 | Loss: 0.0080 | Val AUC-PR: 0.0000 | Max Hardness: 0.1000 | Time: 149.5s
+[2026-04-12 13:47:49] 📈 [Curriculum Update] Epoch 4 | Unlocked 2859380/21454425 samples (13.3%) | Max Hardness: 0.1333
+Epoch 04 | Loss: 0.0078 | Val AUC-PR: 0.0000 | Max Hardness: 0.1333 | Time: 150.3s
+[2026-04-12 13:50:19] 📈 [Curriculum Update] Epoch 5 | Unlocked 3573165/21454425 samples (16.7%) | Max Hardness: 0.1667
+Epoch 05 | Loss: 0.0075 | Val AUC-PR: 0.0000 | Max Hardness: 0.1667 | Time: 197.7s
+[2026-04-12 13:53:38] 📈 [Curriculum Update] Epoch 6 | Unlocked 4288313/21454425 samples (20.0%) | Max Hardness: 0.2000
+Epoch 06 | Loss: 0.0071 | Val AUC-PR: 0.0000 | Max Hardness: 0.2000 | Time: 151.3s
+[2026-04-12 13:56:10] 📈 [Curriculum Update] Epoch 7 | Unlocked 5004326/21454425 samples (23.3%) | Max Hardness: 0.2333
+Epoch 07 | Loss: 0.0069 | Val AUC-PR: 0.0000 | Max Hardness: 0.2333 | Time: 151.8s
+[2026-04-12 13:58:42] 📈 [Curriculum Update] Epoch 8 | Unlocked 5718638/21454425 samples (26.7%) | Max Hardness: 0.2667
+Epoch 08 | Loss: 0.0067 | Val AUC-PR: 0.0000 | Max Hardness: 0.2667 | Time: 151.9s
+[2026-04-12 14:01:14] 📈 [Curriculum Update] Epoch 9 | Unlocked 6434904/21454425 samples (30.0%) | Max Hardness: 0.3000
+Epoch 09 | Loss: 0.0066 | Val AUC-PR: 0.0000 | Max Hardness: 0.3000 | Time: 152.4s
+[2026-04-12 14:03:47] 📈 [Curriculum Update] Epoch 10 | Unlocked 7149814/21454425 samples (33.3%) | Max Hardness: 0.3333
+
+[Trainer] Computing hardness scores (Single-threaded GPU)...
+Hardness Eval: 100%|████████████████| 420675/420675 [11:19<00:00, 618.77steps/s]
+💾 [Logger] Bulk saved 21454425 hardness rows to curriculum_scores.csv
+Epoch 10 | Loss: 0.0066 | Val AUC-PR: 0.0000 | Max Hardness: 0.3333 | Time: 916.3s
+[2026-04-12 14:19:04] 📈 [Curriculum Update] Epoch 11 | Unlocked 7868252/21454425 samples (36.7%) | Max Hardness: 0.3667
+Epoch 11 | Loss: 0.0065 | Val AUC-PR: 0.0000 | Max Hardness: 0.3667 | Time: 153.2s
+[2026-04-12 14:21:38] 📈 [Curriculum Update] Epoch 12 | Unlocked 8583811/21454425 samples (40.0%) | Max Hardness: 0.4000
+Epoch 12 | Loss: 0.0064 | Val AUC-PR: 0.0000 | Max Hardness: 0.4000 | Time: 153.4s
+[2026-04-12 14:24:12] 📈 [Curriculum Update] Epoch 13 | Unlocked 9299077/21454425 samples (43.3%) | Max Hardness: 0.4333
+Epoch 13 | Loss: 0.0065 | Val AUC-PR: 0.0000 | Max Hardness: 0.4333 | Time: 153.5s
+[2026-04-12 14:26:46] 📈 [Curriculum Update] Epoch 14 | Unlocked 10014657/21454425 samples (46.7%) | Max Hardness: 0.4667
+Epoch 14 | Loss: 0.0064 | Val AUC-PR: 0.0000 | Max Hardness: 0.4667 | Time: 154.1s
+[2026-04-12 14:29:21] 📈 [Curriculum Update] Epoch 15 | Unlocked 10729923/21454425 samples (50.0%) | Max Hardness: 0.5000
+Epoch 15 | Loss: 0.0064 | Val AUC-PR: 0.0000 | Max Hardness: 0.5000 | Time: 201.3s
+[2026-04-12 14:32:42] 📈 [Curriculum Update] Epoch 16 | Unlocked 11444819/21454425 samples (53.3%) | Max Hardness: 0.5333
+Epoch 16 | Loss: 0.0064 | Val AUC-PR: 0.0000 | Max Hardness: 0.5333 | Time: 154.9s
+[2026-04-12 14:35:18] 📈 [Curriculum Update] Epoch 17 | Unlocked 12159508/21454425 samples (56.7%) | Max Hardness: 0.5667
+Epoch 17 | Loss: 0.0064 | Val AUC-PR: 0.0000 | Max Hardness: 0.5667 | Time: 155.1s
+[2026-04-12 14:37:53] 📈 [Curriculum Update] Epoch 18 | Unlocked 12874487/21454425 samples (60.0%) | Max Hardness: 0.6000
+Epoch 18 | Loss: 0.0064 | Val AUC-PR: 0.0000 | Max Hardness: 0.6000 | Time: 155.5s
+[2026-04-12 14:40:29] 📈 [Curriculum Update] Epoch 19 | Unlocked 13589453/21454425 samples (63.3%) | Max Hardness: 0.6333
+Epoch 19 | Loss: 0.0064 | Val AUC-PR: 0.0000 | Max Hardness: 0.6333 | Time: 155.9s
+[2026-04-12 14:43:06] 📈 [Curriculum Update] Epoch 20 | Unlocked 14305231/21454425 samples (66.7%) | Max Hardness: 0.6667
+
+[Trainer] Computing hardness scores (Single-threaded GPU)...
+Hardness Eval: 100%|████████████████| 420675/420675 [11:18<00:00, 620.37steps/s]
+💾 [Logger] Bulk saved 21454425 hardness rows to curriculum_scores.csv
+Epoch 20 | Loss: 0.0064 | Val AUC-PR: 0.0000 | Max Hardness: 0.6667 | Time: 918.1s
+[2026-04-12 14:58:25] 📈 [Curriculum Update] Epoch 21 | Unlocked 15019428/21454425 samples (70.0%) | Max Hardness: 0.7000
+Epoch 21 | Loss: 0.0063 | Val AUC-PR: 0.0000 | Max Hardness: 0.7000 | Time: 156.7s
+[2026-04-12 15:01:02] 📈 [Curriculum Update] Epoch 22 | Unlocked 15734635/21454425 samples (73.3%) | Max Hardness: 0.7333
+Epoch 22 | Loss: 0.0063 | Val AUC-PR: 0.0000 | Max Hardness: 0.7333 | Time: 157.1s
+[2026-04-12 15:03:39] 📈 [Curriculum Update] Epoch 23 | Unlocked 16449679/21454425 samples (76.7%) | Max Hardness: 0.7667
+Epoch 23 | Loss: 0.0063 | Val AUC-PR: 0.0000 | Max Hardness: 0.7667 | Time: 158.2s
+[2026-04-12 15:06:18] 📈 [Curriculum Update] Epoch 24 | Unlocked 17165225/21454425 samples (80.0%) | Max Hardness: 0.8000
+Epoch 24 | Loss: 0.0063 | Val AUC-PR: 0.0000 | Max Hardness: 0.8000 | Time: 158.4s
+[2026-04-12 15:08:57] 📈 [Curriculum Update] Epoch 25 | Unlocked 17879264/21454425 samples (83.3%) | Max Hardness: 0.8333
+Epoch 25 | Loss: 0.0063 | Val AUC-PR: 0.0000 | Max Hardness: 0.8333 | Time: 205.5s
+[2026-04-12 15:12:23] 📈 [Curriculum Update] Epoch 26 | Unlocked 18592695/21454425 samples (86.7%) | Max Hardness: 0.8667
+Epoch 26 | Loss: 0.0063 | Val AUC-PR: 0.0000 | Max Hardness: 0.8667 | Time: 158.9s
+[2026-04-12 15:15:02] 📈 [Curriculum Update] Epoch 27 | Unlocked 19308655/21454425 samples (90.0%) | Max Hardness: 0.9000
+Epoch 27 | Loss: 0.0063 | Val AUC-PR: 0.0000 | Max Hardness: 0.9000 | Time: 159.3s
+[2026-04-12 15:17:42] 📈 [Curriculum Update] Epoch 28 | Unlocked 20023085/21454425 samples (93.3%) | Max Hardness: 0.9333
+Epoch 28 | Loss: 0.0063 | Val AUC-PR: 0.0000 | Max Hardness: 0.9333 | Time: 159.8s
+[2026-04-12 15:20:23] 📈 [Curriculum Update] Epoch 29 | Unlocked 20738444/21454425 samples (96.7%) | Max Hardness: 0.9667
+Epoch 29 | Loss: 0.0063 | Val AUC-PR: 0.0000 | Max Hardness: 0.9667 | Time: 160.0s
+[2026-04-12 15:23:03] 📈 [Curriculum Update] Epoch 30 | Unlocked 21454425/21454425 samples (100.0%) | Max Hardness: 1.0000
+
+[Trainer] Computing hardness scores (Single-threaded GPU)...
+Hardness Eval: 100%|████████████████| 420675/420675 [11:40<00:00, 600.57steps/s]
+💾 [Logger] Bulk saved 21454425 hardness rows to curriculum_scores.csv
+Epoch 30 | Loss: 0.0063 | Val AUC-PR: 0.0000 | Max Hardness: 1.0000 | Time: 936.4s
+[2026-04-12 15:38:40] 📈 [Curriculum Update] Epoch 31 | Unlocked 21454425/21454425 samples (100.0%) | Max Hardness: 1.0000
+Epoch 31 | Loss: 0.0063 | Val AUC-PR: 0.0000 | Max Hardness: 1.0000 | Time: 147.8s
+[2026-04-12 15:41:08] 📈 [Curriculum Update] Epoch 32 | Unlocked 21454425/21454425 samples (100.0%) | Max Hardness: 1.0000
+Epoch 32 | Loss: 0.0064 | Val AUC-PR: 0.0000 | Max Hardness: 1.0000 | Time: 145.0s
+[2026-04-12 15:43:34] 📈 [Curriculum Update] Epoch 33 | Unlocked 21454425/21454425 samples (100.0%) | Max Hardness: 1.0000
+Epoch 33 | Loss: 0.0064 | Val AUC-PR: 0.0000 | Max Hardness: 1.0000 | Time: 144.4s
+[2026-04-12 15:45:59] 📈 [Curriculum Update] Epoch 34 | Unlocked 21454425/21454425 samples (100.0%) | Max Hardness: 1.0000
+Epoch 34 | Loss: 0.0064 | Val AUC-PR: 0.0000 | Max Hardness: 1.0000 | Time: 144.9s
+[2026-04-12 15:48:24] 📈 [Curriculum Update] Epoch 35 | Unlocked 21454425/21454425 samples (100.0%) | Max Hardness: 1.0000
+Epoch 35 | Loss: 0.0065 | Val AUC-PR: 0.0000 | Max Hardness: 1.0000 | Time: 191.6s
+[2026-04-12 15:51:37] 📈 [Curriculum Update] Epoch 36 | Unlocked 21454425/21454425 samples (100.0%) | Max Hardness: 1.0000
+Epoch 36 | Loss: 0.0064 | Val AUC-PR: 0.0000 | Max Hardness: 1.0000 | Time: 144.2s
+[2026-04-12 15:54:01] 📈 [Curriculum Update] Epoch 37 | Unlocked 21454425/21454425 samples (100.0%) | Max Hardness: 1.0000
+Epoch 37 | Loss: 0.0064 | Val AUC-PR: 0.0000 | Max Hardness: 1.0000 | Time: 144.3s
+[2026-04-12 15:56:26] 📈 [Curriculum Update] Epoch 38 | Unlocked 21454425/21454425 samples (100.0%) | Max Hardness: 1.0000
+Epoch 38 | Loss: 0.0064 | Val AUC-PR: 0.0000 | Max Hardness: 1.0000 | Time: 143.8s
+[2026-04-12 15:58:50] 📈 [Curriculum Update] Epoch 39 | Unlocked 21454425/21454425 samples (100.0%) | Max Hardness: 1.0000
+Epoch 39 | Loss: 0.0064 | Val AUC-PR: 0.0000 | Max Hardness: 1.0000 | Time: 143.8s
+[2026-04-12 16:01:15] 📈 [Curriculum Update] Epoch 40 | Unlocked 21454425/21454425 samples (100.0%) | Max Hardness: 1.0000
+
+[Trainer] Computing hardness scores (Single-threaded GPU)...
+Hardness Eval: 100%|████████████████| 420675/420675 [11:24<00:00, 614.63steps/s]
+💾 [Logger] Bulk saved 21454425 hardness rows to curriculum_scores.csv
+Epoch 40 | Loss: 0.0064 | Val AUC-PR: 0.0000 | Max Hardness: 1.0000 | Time: 912.3s
+[2026-04-12 16:16:28] 📈 [Curriculum Update] Epoch 41 | Unlocked 21454425/21454425 samples (100.0%) | Max Hardness: 1.0000
+Epoch 41 | Loss: 0.0064 | Val AUC-PR: 0.0000 | Max Hardness: 1.0000 | Time: 143.8s
+[2026-04-12 16:18:52] 📈 [Curriculum Update] Epoch 42 | Unlocked 21454425/21454425 samples (100.0%) | Max Hardness: 1.0000
+Epoch 42 | Loss: 0.0064 | Val AUC-PR: 0.0000 | Max Hardness: 1.0000 | Time: 144.3s
+[2026-04-12 16:21:17] 📈 [Curriculum Update] Epoch 43 | Unlocked 21454425/21454425 samples (100.0%) | Max Hardness: 1.0000
+Epoch 43 | Loss: 0.0063 | Val AUC-PR: 0.0000 | Max Hardness: 1.0000 | Time: 144.0s
+[2026-04-12 16:23:41] 📈 [Curriculum Update] Epoch 44 | Unlocked 21454425/21454425 samples (100.0%) | Max Hardness: 1.0000
+Epoch 44 | Loss: 0.0063 | Val AUC-PR: 0.0000 | Max Hardness: 1.0000 | Time: 144.2s
+[2026-04-12 16:26:06] 📈 [Curriculum Update] Epoch 45 | Unlocked 21454425/21454425 samples (100.0%) | Max Hardness: 1.0000
+Epoch 45 | Loss: 0.0063 | Val AUC-PR: 0.0000 | Max Hardness: 1.0000 | Time: 191.0s
+[2026-04-12 16:29:18] 📈 [Curriculum Update] Epoch 46 | Unlocked 21454425/21454425 samples (100.0%) | Max Hardness: 1.0000
+Epoch 46 | Loss: 0.0064 | Val AUC-PR: 0.0000 | Max Hardness: 1.0000 | Time: 143.8s
+[2026-04-12 16:31:42] 📈 [Curriculum Update] Epoch 47 | Unlocked 21454425/21454425 samples (100.0%) | Max Hardness: 1.0000
+Epoch 47 | Loss: 0.0065 | Val AUC-PR: 0.0000 | Max Hardness: 1.0000 | Time: 144.4s
+[2026-04-12 16:34:07] 📈 [Curriculum Update] Epoch 48 | Unlocked 21454425/21454425 samples (100.0%) | Max Hardness: 1.0000
+Epoch 48 | Loss: 0.0064 | Val AUC-PR: 0.0000 | Max Hardness: 1.0000 | Time: 143.6s
+[2026-04-12 16:36:31] 📈 [Curriculum Update] Epoch 49 | Unlocked 21454425/21454425 samples (100.0%) | Max Hardness: 1.0000
+Epoch 49 | Loss: 0.0064 | Val AUC-PR: 0.0000 | Max Hardness: 1.0000 | Time: 190.8s
+
+============================================================
+💽 IEEE PAPER LOG AUDIT: VERIFYING DISK WRITES
+============================================================
+✅ Hyperparameters        : hyperparameters.json (1.26 KB)
+✅ Architecture           : architecture_details.txt (0.56 KB)
+✅ Events Log             : training_events.log (6.16 KB)
+✅ Epoch Metrics          : metrics.csv (1.70 KB)
+✅ Detailed Scores (Bulk) : curriculum_scores.csv (3188.88 MB)
+------------------------------------------------------------
+🚀 SUCCESS: All files are securely written and contain data.
+============================================================
+
+
+[Evaluate] Running inference on Validation Set for Dynamic Thresholding...
+[Evaluate] Val Mean: 0.0377 | Val Std: 0.0100
+[Evaluate] Statistical Threshold (Mean + 3σ): 0.0829
+[Evaluate] Running inference on Test Set...
+  Done in 12389.1s  |  F1-PA=0.8792  AUC-PR=0.6618
+[AblationTracker] Added 'Full RC-TGAD': F1-PA=0.0000  AUC-PR=0.0000
+
+
+All 1 runs complete in 206.5 minutes
+
+===========================================================================
+  ABLATION RESULTS  —  SWAT  (1 seeds)
+===========================================================================
+  Variant                                       F1-PA     AUC-PR  Precision   Recall
+  ──────────────────────────────────────────────────────────────────────
+  Full RC-TGAD                           0.8792±0.0000  0.6618  0.8252  0.5877
+===========================================================================
+
+  LaTeX table saved: results/ablations/swat/paper_table.tex
