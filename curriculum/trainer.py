@@ -344,11 +344,16 @@ class Trainer:
                 self.logger.log_epoch(epoch, train_loss, f1, epoch_time)
 
             # 🧹 CRASH PREVENTION: Clear memory actively before next cycle
+            # 🧹 CRASH PREVENTION
             try:
                 del indices
             except NameError:
                 pass
             gc.collect()
             torch.cuda.empty_cache()
+
+        # 💽 THE FINAL STEP: Prove the files exist before shutting down!
+        if self.logger:
+            self.logger.verify_disk_writes()
 
         return self.history
