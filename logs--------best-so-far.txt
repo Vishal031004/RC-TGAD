@@ -1,0 +1,332 @@
+🗑️ Old results cleared! No more skipping.
+[Config] Override: data.data_dir = /kaggle/input/datasets/vishalp030303/swat-raw/
+[Config] Override: training.epochs = 50
+[Config] Override: training.batch_size = 128
+[Config] Override: training.weight_decay = 0.001
+[Config] Override: model.dropout = 0.3
+[Config] Override: model.window_size = 60
+[Config] Override: model.lstm_hidden = 128
+[Config] Override: model.gnn_heads = 4
+[Config] Override: model.gnn_out_dim = 128
+[Config] Override: rag.vector_dim = 128
+[Config] Override: rag.alpha_1 = 0.6
+[Config] Override: rag.alpha_2 = 0.1
+[Config] Override: rag.alpha_3 = 0.3
+[Config] Override: data.dataset = swat
+[Config] Override: curriculum.enabled = False
+[Config] Override: curriculum.enabled = True
+[Config] Override: rag.alpha_1 = 0.33
+[Config] Override: rag.alpha_2 = 0.33
+[Config] Override: rag.alpha_3 = 0.34
+[Config] Override: curriculum.enabled = True
+[Config] Override: rag.alpha_1 = 1.0
+[Config] Override: rag.alpha_2 = 0.0
+[Config] Override: rag.alpha_3 = 0.0
+[Config] Override: curriculum.enabled = True
+[Config] Override: rag.alpha_1 = 0.0
+[Config] Override: rag.alpha_2 = 1.0
+[Config] Override: rag.alpha_3 = 0.0
+[Config] Override: curriculum.enabled = True
+[Config] Override: rag.alpha_1 = 0.5
+[Config] Override: rag.alpha_2 = 0.5
+[Config] Override: rag.alpha_3 = 0.0
+[Config] Override: curriculum.enabled = True
+[Config] Override: rag.alpha_1 = 0.33
+[Config] Override: rag.alpha_2 = 0.33
+[Config] Override: rag.alpha_3 = 0.34
+[Config] Override: data.data_dir = /kaggle/input/datasets/vishalp030303/swat-raw/
+[Config] Override: training.epochs = 50
+[Config] Override: training.batch_size = 128
+[Config] Override: training.weight_decay = 0.001
+[Config] Override: model.dropout = 0.3
+[Config] Override: model.window_size = 60
+[Config] Override: model.lstm_hidden = 128
+[Config] Override: model.gnn_heads = 4
+[Config] Override: model.gnn_out_dim = 128
+[Config] Override: rag.vector_dim = 128
+[Config] Override: rag.alpha_1 = 0.6
+[Config] Override: rag.alpha_2 = 0.1
+[Config] Override: rag.alpha_3 = 0.3
+[Config] Override: data.dataset = swat
+[Config] Override: data.data_dir = /kaggle/input/datasets/vishalp030303/swat-raw/
+[Config] Override: training.epochs = 50
+[Config] Override: training.batch_size = 128
+[Config] Override: training.weight_decay = 0.001
+[Config] Override: model.dropout = 0.3
+[Config] Override: model.window_size = 60
+[Config] Override: model.lstm_hidden = 128
+[Config] Override: model.gnn_heads = 4
+[Config] Override: model.gnn_out_dim = 128
+[Config] Override: rag.vector_dim = 128
+[Config] Override: rag.alpha_1 = 0.6
+[Config] Override: rag.alpha_2 = 0.1
+[Config] Override: rag.alpha_3 = 0.3
+[Config] Override: data.dataset = swat
+[Config] Override: data.data_dir = /kaggle/input/datasets/vishalp030303/swat-raw/
+[Config] Override: training.epochs = 50
+[Config] Override: training.batch_size = 128
+[Config] Override: training.weight_decay = 0.001
+[Config] Override: model.dropout = 0.3
+[Config] Override: model.window_size = 60
+[Config] Override: model.lstm_hidden = 128
+[Config] Override: model.gnn_heads = 4
+[Config] Override: model.gnn_out_dim = 128
+[Config] Override: rag.vector_dim = 128
+[Config] Override: rag.alpha_1 = 0.6
+[Config] Override: rag.alpha_2 = 0.1
+[Config] Override: rag.alpha_3 = 0.3
+[Config] Override: data.dataset = swat
+[Config] Override: data.data_dir = /kaggle/input/datasets/vishalp030303/swat-raw/
+[Config] Override: training.epochs = 50
+[Config] Override: training.batch_size = 128
+[Config] Override: training.weight_decay = 0.001
+[Config] Override: model.dropout = 0.3
+[Config] Override: model.window_size = 60
+[Config] Override: model.lstm_hidden = 128
+[Config] Override: model.gnn_heads = 4
+[Config] Override: model.gnn_out_dim = 128
+[Config] Override: rag.vector_dim = 128
+[Config] Override: rag.alpha_1 = 0.6
+[Config] Override: rag.alpha_2 = 0.1
+[Config] Override: rag.alpha_3 = 0.3
+[Config] Override: data.dataset = swat
+[Config] Override: data.data_dir = /kaggle/input/datasets/vishalp030303/swat-raw/
+[Config] Override: training.epochs = 50
+[Config] Override: training.batch_size = 128
+[Config] Override: training.weight_decay = 0.001
+[Config] Override: model.dropout = 0.3
+[Config] Override: model.window_size = 60
+[Config] Override: model.lstm_hidden = 128
+[Config] Override: model.gnn_heads = 4
+[Config] Override: model.gnn_out_dim = 128
+[Config] Override: rag.vector_dim = 128
+[Config] Override: rag.alpha_1 = 0.6
+[Config] Override: rag.alpha_2 = 0.1
+[Config] Override: rag.alpha_3 = 0.3
+[Config] Override: data.dataset = swat
+[Config] Override: data.data_dir = /kaggle/input/datasets/vishalp030303/swat-raw/
+[Config] Override: training.epochs = 50
+[Config] Override: training.batch_size = 128
+[Config] Override: training.weight_decay = 0.001
+[Config] Override: model.dropout = 0.3
+[Config] Override: model.window_size = 60
+[Config] Override: model.lstm_hidden = 128
+[Config] Override: model.gnn_heads = 4
+[Config] Override: model.gnn_out_dim = 128
+[Config] Override: rag.vector_dim = 128
+[Config] Override: rag.alpha_1 = 0.6
+[Config] Override: rag.alpha_2 = 0.1
+[Config] Override: rag.alpha_3 = 0.3
+[Config] Override: data.dataset = swat
+
+RC-TGAD — ABLATION SUITE (PAPER READY)
+Dataset   : swat
+Variants  : 1
+Seeds     : [42]
+Epochs    : 50
+Results   : results/ablations/swat
+
+Variants to run:
+  1. Full RC-TGAD                           curriculum=True  α=(0.60,0.10,0.30)
+
+───────────────────────────────────────────────────────
+  Variant: Full RC-TGAD
+───────────────────────────────────────────────────────
+
+  [1/1] seed=42
+[2026-04-12 01:05:16] 🚀 Deep Research Logger Initialized.
+
+[SWaT Loader] Loading RAW Data | Val Ratio: 0.15
+🌊 Applying causal smoothing (Shifted Rolling Mean)...
+🧠 Filtering zero-variance features...
+Removed 0 dead sensors.
+⚖️ Applying Robust Scaling and Hard Clipping [-5, 5]...
+[Dataset] Train samples: 420,690
+[Dataset] Val samples:   74,190
+[Dataset] Test samples:  449,859
+
+[Dataset] Auto-detected num_nodes = 51
+[2026-04-12 01:05:58] 💾 Architecture details saved.
+[Trainer] Using 2 GPUs via DataParallel
+
+[Trainer] Computing hardness scores (Single-threaded GPU)...
+Hardness Eval: 100%|████████████████| 420690/420690 [09:34<00:00, 732.81steps/s]
+
+[Trainer] Starting training...
+------------------------------------------------------------
+[2026-04-12 01:15:35] 📈 [Curriculum Update] Epoch 0 | Unlocked 6436557/21455190 samples (30.0%) | Max Hardness: 0.3001
+/kaggle/working/Virtual-Focus-Group/curriculum/trainer.py:172: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = GradScaler()
+/kaggle/working/Virtual-Focus-Group/curriculum/trainer.py:204: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with autocast():
+Epoch 0 | Loss: 0.0389 | F1: 0.0000 | Time: 182.7s
+[2026-04-12 01:18:38] 📈 [Curriculum Update] Epoch 1 | Unlocked 6436557/21455190 samples (30.0%) | Max Hardness: 0.3001
+/kaggle/working/Virtual-Focus-Group/curriculum/trainer.py:172: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = GradScaler()
+/kaggle/working/Virtual-Focus-Group/curriculum/trainer.py:204: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with autocast():
+Epoch 1 | Loss: 0.0078 | F1: 0.0000 | Time: 140.5s
+[2026-04-12 01:20:57] 📈 [Curriculum Update] Epoch 2 | Unlocked 1430081/21455190 samples (6.7%) | Max Hardness: 0.0667
+Epoch 2 | Loss: 0.0085 | F1: 0.0000 | Time: 128.5s
+[2026-04-12 01:23:07] 📈 [Curriculum Update] Epoch 3 | Unlocked 2144598/21455190 samples (10.0%) | Max Hardness: 0.1000
+Epoch 3 | Loss: 0.0076 | F1: 0.0000 | Time: 132.7s
+[2026-04-12 01:25:20] 📈 [Curriculum Update] Epoch 4 | Unlocked 2859485/21455190 samples (13.3%) | Max Hardness: 0.1333
+Epoch 4 | Loss: 0.0075 | F1: 0.0000 | Time: 133.4s
+[2026-04-12 01:27:34] 📈 [Curriculum Update] Epoch 5 | Unlocked 3573290/21455190 samples (16.7%) | Max Hardness: 0.1667
+Epoch 5 | Loss: 0.0069 | F1: 0.0000 | Time: 175.0s
+[2026-04-12 01:30:29] 📈 [Curriculum Update] Epoch 6 | Unlocked 4288462/21455190 samples (20.0%) | Max Hardness: 0.2000
+/kaggle/working/Virtual-Focus-Group/curriculum/trainer.py:172: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = GradScaler()
+/kaggle/working/Virtual-Focus-Group/curriculum/trainer.py:204: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with autocast():
+Epoch 6 | Loss: 0.0070 | F1: 0.0000 | Time: 133.9s
+[2026-04-12 01:32:44] 📈 [Curriculum Update] Epoch 7 | Unlocked 5004506/21455190 samples (23.3%) | Max Hardness: 0.2333
+Epoch 7 | Loss: 0.0067 | F1: 0.0000 | Time: 133.5s
+[2026-04-12 01:34:58] 📈 [Curriculum Update] Epoch 8 | Unlocked 5718842/21455190 samples (26.7%) | Max Hardness: 0.2667
+Epoch 8 | Loss: 0.0066 | F1: 0.0000 | Time: 135.8s
+[2026-04-12 01:37:14] 📈 [Curriculum Update] Epoch 9 | Unlocked 6435134/21455190 samples (30.0%) | Max Hardness: 0.3000
+Epoch 9 | Loss: 0.0066 | F1: 0.0000 | Time: 136.2s
+[2026-04-12 01:39:31] 📈 [Curriculum Update] Epoch 10 | Unlocked 7150072/21455190 samples (33.3%) | Max Hardness: 0.3333
+
+[Trainer] Computing hardness scores (Single-threaded GPU)...
+Hardness Eval: 100%|████████████████| 420690/420690 [09:35<00:00, 730.37steps/s]
+Epoch 10 | Loss: 0.0065 | F1: 0.0000 | Time: 753.9s
+[2026-04-12 01:52:05] 📈 [Curriculum Update] Epoch 11 | Unlocked 7868519/21455190 samples (36.7%) | Max Hardness: 0.3667
+/kaggle/working/Virtual-Focus-Group/curriculum/trainer.py:172: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = GradScaler()
+/kaggle/working/Virtual-Focus-Group/curriculum/trainer.py:204: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with autocast():
+Epoch 11 | Loss: 0.0065 | F1: 0.0000 | Time: 136.3s
+[2026-04-12 01:54:22] 📈 [Curriculum Update] Epoch 12 | Unlocked 8584093/21455190 samples (40.0%) | Max Hardness: 0.4000
+Epoch 12 | Loss: 0.0064 | F1: 0.0000 | Time: 136.8s
+[2026-04-12 01:56:39] 📈 [Curriculum Update] Epoch 13 | Unlocked 9299393/21455190 samples (43.3%) | Max Hardness: 0.4333
+Epoch 13 | Loss: 0.0064 | F1: 0.0000 | Time: 137.1s
+[2026-04-12 01:58:57] 📈 [Curriculum Update] Epoch 14 | Unlocked 10014995/21455190 samples (46.7%) | Max Hardness: 0.4667
+Epoch 14 | Loss: 0.0064 | F1: 0.0000 | Time: 137.6s
+[2026-04-12 02:01:15] 📈 [Curriculum Update] Epoch 15 | Unlocked 10730306/21455190 samples (50.0%) | Max Hardness: 0.5000
+Epoch 15 | Loss: 0.0064 | F1: 0.0000 | Time: 178.8s
+[2026-04-12 02:04:15] 📈 [Curriculum Update] Epoch 16 | Unlocked 11445231/21455190 samples (53.3%) | Max Hardness: 0.5333
+/kaggle/working/Virtual-Focus-Group/curriculum/trainer.py:172: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = GradScaler()
+/kaggle/working/Virtual-Focus-Group/curriculum/trainer.py:204: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with autocast():
+Epoch 16 | Loss: 0.0065 | F1: 0.0000 | Time: 137.8s
+[2026-04-12 02:06:33] 📈 [Curriculum Update] Epoch 17 | Unlocked 12159943/21455190 samples (56.7%) | Max Hardness: 0.5667
+Epoch 17 | Loss: 0.0064 | F1: 0.0000 | Time: 138.0s
+[2026-04-12 02:08:52] 📈 [Curriculum Update] Epoch 18 | Unlocked 12874958/21455190 samples (60.0%) | Max Hardness: 0.6000
+Epoch 18 | Loss: 0.0064 | F1: 0.0000 | Time: 139.1s
+[2026-04-12 02:11:11] 📈 [Curriculum Update] Epoch 19 | Unlocked 13589955/21455190 samples (63.3%) | Max Hardness: 0.6333
+Epoch 19 | Loss: 0.0063 | F1: 0.0000 | Time: 139.2s
+[2026-04-12 02:13:31] 📈 [Curriculum Update] Epoch 20 | Unlocked 14305740/21455190 samples (66.7%) | Max Hardness: 0.6667
+
+[Trainer] Computing hardness scores (Single-threaded GPU)...
+Hardness Eval: 100%|████████████████| 420690/420690 [09:30<00:00, 737.93steps/s]
+Epoch 20 | Loss: 0.0064 | F1: 0.0000 | Time: 752.1s
+[2026-04-12 02:26:04] 📈 [Curriculum Update] Epoch 21 | Unlocked 15019961/21455190 samples (70.0%) | Max Hardness: 0.7000
+/kaggle/working/Virtual-Focus-Group/curriculum/trainer.py:172: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = GradScaler()
+/kaggle/working/Virtual-Focus-Group/curriculum/trainer.py:204: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with autocast():
+Epoch 21 | Loss: 0.0066 | F1: 0.0000 | Time: 140.4s
+[2026-04-12 02:28:25] 📈 [Curriculum Update] Epoch 22 | Unlocked 15735191/21455190 samples (73.3%) | Max Hardness: 0.7333
+Epoch 22 | Loss: 0.0064 | F1: 0.0000 | Time: 140.8s
+[2026-04-12 02:30:46] 📈 [Curriculum Update] Epoch 23 | Unlocked 16450253/21455190 samples (76.7%) | Max Hardness: 0.7667
+Epoch 23 | Loss: 0.0065 | F1: 0.0000 | Time: 141.1s
+[2026-04-12 02:33:08] 📈 [Curriculum Update] Epoch 24 | Unlocked 17165826/21455190 samples (80.0%) | Max Hardness: 0.8000
+Epoch 24 | Loss: 0.0063 | F1: 0.0000 | Time: 141.2s
+[2026-04-12 02:35:29] 📈 [Curriculum Update] Epoch 25 | Unlocked 17879884/21455190 samples (83.3%) | Max Hardness: 0.8333
+Epoch 25 | Loss: 0.0064 | F1: 0.0000 | Time: 182.9s
+[2026-04-12 02:38:33] 📈 [Curriculum Update] Epoch 26 | Unlocked 18593320/21455190 samples (86.7%) | Max Hardness: 0.8667
+/kaggle/working/Virtual-Focus-Group/curriculum/trainer.py:172: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = GradScaler()
+/kaggle/working/Virtual-Focus-Group/curriculum/trainer.py:204: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with autocast():
+Epoch 26 | Loss: 0.0063 | F1: 0.0000 | Time: 140.6s
+[2026-04-12 02:40:54] 📈 [Curriculum Update] Epoch 27 | Unlocked 19309304/21455190 samples (90.0%) | Max Hardness: 0.9000
+Epoch 27 | Loss: 0.0064 | F1: 0.0000 | Time: 141.7s
+[2026-04-12 02:43:16] 📈 [Curriculum Update] Epoch 28 | Unlocked 20023773/21455190 samples (93.3%) | Max Hardness: 0.9333
+Epoch 28 | Loss: 0.0064 | F1: 0.0000 | Time: 141.9s
+[2026-04-12 02:45:39] 📈 [Curriculum Update] Epoch 29 | Unlocked 20739171/21455190 samples (96.7%) | Max Hardness: 0.9667
+Epoch 29 | Loss: 0.0063 | F1: 0.0000 | Time: 142.5s
+[2026-04-12 02:48:02] 📈 [Curriculum Update] Epoch 30 | Unlocked 21455190/21455190 samples (100.0%) | Max Hardness: 1.0000
+
+[Trainer] Computing hardness scores (Single-threaded GPU)...
+Hardness Eval: 100%|████████████████| 420690/420690 [09:29<00:00, 738.27steps/s]
+Epoch 30 | Loss: 0.0064 | F1: 0.0000 | Time: 739.6s
+[2026-04-12 03:00:22] 📈 [Curriculum Update] Epoch 31 | Unlocked 21455190/21455190 samples (100.0%) | Max Hardness: 1.0000
+/kaggle/working/Virtual-Focus-Group/curriculum/trainer.py:172: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = GradScaler()
+/kaggle/working/Virtual-Focus-Group/curriculum/trainer.py:204: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with autocast():
+Epoch 31 | Loss: 0.0063 | F1: 0.0000 | Time: 127.3s
+[2026-04-12 03:02:30] 📈 [Curriculum Update] Epoch 32 | Unlocked 21455190/21455190 samples (100.0%) | Max Hardness: 1.0000
+Epoch 32 | Loss: 0.0063 | F1: 0.0000 | Time: 127.4s
+[2026-04-12 03:04:37] 📈 [Curriculum Update] Epoch 33 | Unlocked 21455190/21455190 samples (100.0%) | Max Hardness: 1.0000
+Epoch 33 | Loss: 0.0063 | F1: 0.0000 | Time: 127.0s
+[2026-04-12 03:06:45] 📈 [Curriculum Update] Epoch 34 | Unlocked 21455190/21455190 samples (100.0%) | Max Hardness: 1.0000
+Epoch 34 | Loss: 0.0063 | F1: 0.0000 | Time: 127.3s
+[2026-04-12 03:08:53] 📈 [Curriculum Update] Epoch 35 | Unlocked 21455190/21455190 samples (100.0%) | Max Hardness: 1.0000
+Epoch 35 | Loss: 0.0065 | F1: 0.0000 | Time: 167.5s
+[2026-04-12 03:11:41] 📈 [Curriculum Update] Epoch 36 | Unlocked 21455190/21455190 samples (100.0%) | Max Hardness: 1.0000
+/kaggle/working/Virtual-Focus-Group/curriculum/trainer.py:172: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = GradScaler()
+/kaggle/working/Virtual-Focus-Group/curriculum/trainer.py:204: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with autocast():
+Epoch 36 | Loss: 0.0063 | F1: 0.0000 | Time: 125.6s
+[2026-04-12 03:13:47] 📈 [Curriculum Update] Epoch 37 | Unlocked 21455190/21455190 samples (100.0%) | Max Hardness: 1.0000
+Epoch 37 | Loss: 0.0063 | F1: 0.0000 | Time: 123.9s
+[2026-04-12 03:15:51] 📈 [Curriculum Update] Epoch 38 | Unlocked 21455190/21455190 samples (100.0%) | Max Hardness: 1.0000
+Epoch 38 | Loss: 0.0063 | F1: 0.0000 | Time: 124.2s
+[2026-04-12 03:17:56] 📈 [Curriculum Update] Epoch 39 | Unlocked 21455190/21455190 samples (100.0%) | Max Hardness: 1.0000
+Epoch 39 | Loss: 0.0063 | F1: 0.0000 | Time: 123.9s
+[2026-04-12 03:20:01] 📈 [Curriculum Update] Epoch 40 | Unlocked 21455190/21455190 samples (100.0%) | Max Hardness: 1.0000
+
+[Trainer] Computing hardness scores (Single-threaded GPU)...
+Hardness Eval: 100%|████████████████| 420690/420690 [09:17<00:00, 754.86steps/s]
+Epoch 40 | Loss: 0.0063 | F1: 0.0000 | Time: 722.8s
+[2026-04-12 03:32:04] 📈 [Curriculum Update] Epoch 41 | Unlocked 21455190/21455190 samples (100.0%) | Max Hardness: 1.0000
+/kaggle/working/Virtual-Focus-Group/curriculum/trainer.py:172: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = GradScaler()
+/kaggle/working/Virtual-Focus-Group/curriculum/trainer.py:204: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with autocast():
+Epoch 41 | Loss: 0.0064 | F1: 0.0000 | Time: 122.8s
+[2026-04-12 03:34:07] 📈 [Curriculum Update] Epoch 42 | Unlocked 21455190/21455190 samples (100.0%) | Max Hardness: 1.0000
+Epoch 42 | Loss: 0.0063 | F1: 0.0000 | Time: 122.8s
+[2026-04-12 03:36:10] 📈 [Curriculum Update] Epoch 43 | Unlocked 21455190/21455190 samples (100.0%) | Max Hardness: 1.0000
+Epoch 43 | Loss: 0.0064 | F1: 0.0000 | Time: 123.5s
+[2026-04-12 03:38:15] 📈 [Curriculum Update] Epoch 44 | Unlocked 21455190/21455190 samples (100.0%) | Max Hardness: 1.0000
+Epoch 44 | Loss: 0.0063 | F1: 0.0000 | Time: 123.6s
+[2026-04-12 03:40:19] 📈 [Curriculum Update] Epoch 45 | Unlocked 21455190/21455190 samples (100.0%) | Max Hardness: 1.0000
+Epoch 45 | Loss: 0.0063 | F1: 0.0000 | Time: 166.5s
+[2026-04-12 03:43:06] 📈 [Curriculum Update] Epoch 46 | Unlocked 21455190/21455190 samples (100.0%) | Max Hardness: 1.0000
+/kaggle/working/Virtual-Focus-Group/curriculum/trainer.py:172: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = GradScaler()
+/kaggle/working/Virtual-Focus-Group/curriculum/trainer.py:204: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with autocast():
+Epoch 46 | Loss: 0.0063 | F1: 0.0000 | Time: 125.2s
+[2026-04-12 03:45:11] 📈 [Curriculum Update] Epoch 47 | Unlocked 21455190/21455190 samples (100.0%) | Max Hardness: 1.0000
+Epoch 47 | Loss: 0.0064 | F1: 0.0000 | Time: 124.7s
+[2026-04-12 03:47:17] 📈 [Curriculum Update] Epoch 48 | Unlocked 21455190/21455190 samples (100.0%) | Max Hardness: 1.0000
+Epoch 48 | Loss: 0.0063 | F1: 0.0000 | Time: 124.9s
+[2026-04-12 03:49:22] 📈 [Curriculum Update] Epoch 49 | Unlocked 21455190/21455190 samples (100.0%) | Max Hardness: 1.0000
+Epoch 49 | Loss: 0.0063 | F1: 0.0000 | Time: 166.3s
+
+[Evaluate] Running inference on Validation Set for Dynamic Thresholding...
+[Evaluate] Val Mean: 0.0272 | Val Std: 0.0086
+[Evaluate] Statistical Threshold (Mean + 3σ): 0.0660
+[Evaluate] Running inference on Test Set...
+  Done in 10536.1s  |  F1-PA=0.8443  AUC-PR=0.5738
+[AblationTracker] Added 'Full RC-TGAD': F1-PA=0.0000  AUC-PR=0.0000
+
+
+All 1 runs complete in 175.6 minutes
+
+===========================================================================
+  ABLATION RESULTS  —  SWAT  (1 seeds)
+===========================================================================
+  Variant                                       F1-PA     AUC-PR  Precision   Recall
+  ──────────────────────────────────────────────────────────────────────
+  Full RC-TGAD                           0.8443±0.0000  0.5738  0.7224  0.6018
+===========================================================================
+
+  LaTeX table saved: results/ablations/swat/paper_table.tex
