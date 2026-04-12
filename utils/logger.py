@@ -62,10 +62,49 @@ class DeepResearchLogger:
         """Logs the pacing event for the Curriculum Scheduler."""
         percentage = (current_k / total_n) * 100
         self.log_event(f"📈 [Curriculum Update] Epoch {epoch} | Unlocked {current_k}/{total_n} samples ({percentage:.1f}%) | Max Hardness: {max_hardness:.4f}")
-
+        print(f"💾 [Logger] Bulk saved {len(detailed_scores)} hardness rows to {self.scores_csv.name}"))
+    
     def log_curriculum_scores(self, detailed_scores):
         """Bulk writes individual hardness scores to prevent Kaggle IO bottlenecks."""
         with open(self.scores_csv, 'a', newline='') as f:
             writer = csv.writer(f)
             # detailed_scores is a list of lists: [[epoch, idx, h_temp, h_struct, h_rag, h_total], ...]
             writer.writerows(detailed_scores)
+
+    def verify_disk_writes(self):
+        """Audits the hard drive to prove files were written and have data."""
+        print("\n" + "="*60)
+        print("💽 IEEE PAPER LOG AUDIT: VERIFYING DISK WRITES")
+        print("="*60)
+        
+        files_to_check = {
+            "Hyperparameters": self.config_json,
+            "Architecture": self.arch_txt,
+            "Events Log": self.events_log,
+            "Epoch Metrics": self.metrics_csv,
+            "Detailed Scores (Bulk)": self.scores_csv
+        }
+        
+        all_good = True
+        for name, filepath in files_to_check.items():
+            if filepath.exists():
+                size_kb = filepath.stat().st_size / 1024
+                if size_kb > 0:
+                    # If it's over 1000 KB, print in MB instead
+                    if size_kb > 1000:
+                        print(f"✅ {name:22} : {filepath.name} ({(size_kb/1024):.2f} MB)")
+                    else:
+                        print(f"✅ {name:22} : {filepath.name} ({size_kb:.2f} KB)")
+                else:
+                    print(f"⚠️ {name:22} : {filepath.name} (CREATED BUT EMPTY!)")
+                    all_good = False
+            else:
+                print(f"❌ {name:22} : {filepath.name} (MISSING FROM DISK!)")
+                all_good = False
+                
+        print("-" * 60)
+        if all_good:
+            print("🚀 SUCCESS: All files are securely written and contain data.")
+        else:
+            print("⚠️ WARNING: Some logs failed to write.")
+        print("="*60 + "\n")
