@@ -155,7 +155,8 @@ class Trainer:
                         graph=batch_data[0]["graph"],
                         t=t,
                         ground_truth_label=int(y[b, n]),
-                        alphas=(a1, a2, a3) # ⚡ Now it actually obeys the Kaggle command line
+                        alphas=(a1, a2, a3), # ⚡ Now it actually obeys the Kaggle command line
+                        return_components=True
                     )
                     
                     # ⚡ Check if the scorer returned a dictionary of parts or just the total float
