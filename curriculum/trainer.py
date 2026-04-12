@@ -92,11 +92,11 @@ class Trainer:
             "val_f1":     [],
             "val_auc_pr": [],
             "pct_data":   [],
+            "max_hardness": []
         }
 
     @torch.no_grad()
     def _compute_hardness_from_loss(self, current_epoch: int = 0) -> np.ndarray:
-        # ⚡ UPDATED PRINT STATEMENT
         print("\n[Trainer] Computing hardness scores (Single-threaded GPU)...")        
         self.backbone.eval()
         ds = self.dataset
@@ -190,8 +190,8 @@ class Trainer:
 
     def _train_epoch(self, indices, batch_size: int) -> float:
         # ⚡ TURBO FIX 2: Automatic Mixed Precision (AMP)
-        from torch.cuda.amp import autocast, GradScaler
-        scaler = GradScaler()
+        from torch.amp import autocast, GradScaler
+        scaler = GradScaler('cuda')
         
         self.backbone.train()
         total_loss = 0.0
@@ -223,7 +223,7 @@ class Trainer:
             self.optimizer.zero_grad()
             
             # Run forward pass in 16-bit to double GPU speed
-            with autocast():
+            with autocast('cuda'):
                 z_all, x_hat_all = self.backbone(x, graph_safe)
                 
                 target = torch.stack([
@@ -235,14 +235,11 @@ class Trainer:
                     loss = nn.MSELoss()(x_hat_all, target)
                 else:
                     # ⚡ TURBO FIX 3: Vectorized Jagged Loss
-                    # We eliminate the 512 independent CPU loss calls.
-                    # Create a boolean mask to grab all valid nodes instantly.
                     B_curr = len(current_t_batch)
                     mask = torch.zeros((B_curr, N), dtype=torch.bool)
                     for b, t_idx in enumerate(current_t_batch):
                         mask[b, t_groups[t_idx]] = True
                         
-                    # Send mask to GPU and slice tensors in one C++ operation
                     mask = mask.to(self.device)
                     valid_x_hat = x_hat_all[mask]
                     valid_target = target[mask]
@@ -252,7 +249,6 @@ class Trainer:
                     else:
                         loss = torch.tensor(0.0, device=self.device, requires_grad=True)
             
-            # Safely scale gradients back up for backward pass
             if isinstance(loss, torch.Tensor):
                 scaler.scale(loss).backward()
                 scaler.unscale_(self.optimizer)
@@ -306,7 +302,7 @@ class Trainer:
         n_samples = len(self.dataset) * self.raw_backbone.num_nodes 
         
         if self.use_curriculum:
-            hardness_array = self._compute_hardness_from_loss()
+            hardness_array = self._compute_hardness_from_loss(0)
         else:
             hardness_array = np.zeros(n_samples, dtype=np.float32)
 
@@ -315,18 +311,23 @@ class Trainer:
 
         for epoch in range(epochs):
             t_start = time.time()
+            max_h = 1.0 # Default fallback
             
             if self.use_curriculum:
                 indices = get_batch_fast(hardness_array, epoch, k_warmup)
+                current_k = len(indices)
+                
+                if current_k > 0:
+                    max_h = float(np.max(hardness_array[indices]))
+                else:
+                    max_h = 0.0
                 
                 # 🛡️ IEEE LOGGER: Record pacing details
                 if self.logger:
-                    current_k = len(indices)
-                    max_hardness = float(np.max(hardness_array[indices])) if current_k > 0 else 0.0
-                    self.logger.log_curriculum_pacing(epoch, current_k, n_samples, max_hardness)
+                    self.logger.log_curriculum_pacing(epoch, current_k, n_samples, max_h)
 
                 if epoch > 0 and epoch % 10 == 0:
-                    hardness_array = self._compute_hardness_from_loss()
+                    hardness_array = self._compute_hardness_from_loss(epoch)
             else:
                 indices = np.arange(n_samples)
 
@@ -336,16 +337,23 @@ class Trainer:
             if val_dataset is not None and (epoch % 5 == 0 or epoch == epochs - 1):
                 f1, auc_pr = self._validate(val_dataset)
 
-            epoch_time = time.time() - t_start
-            print(f"Epoch {epoch} | Loss: {train_loss:.4f} | F1: {f1:.4f} | Time: {epoch_time:.1f}s")
+            # ⚡ UPDATE HISTORY DICT
+            self.history["train_loss"].append(train_loss)
+            self.history["val_f1"].append(f1)
+            self.history["val_auc_pr"].append(auc_pr)
+            self.history["pct_data"].append((len(indices) / n_samples) * 100)
+            self.history["max_hardness"].append(max_h)
 
-            # 🛡️ IEEE LOGGER: Record epoch metrics
+            epoch_time = time.time() - t_start
+            
+            # ⚡ CLEAN PRINT STATEMENT
+            print(f"Epoch {epoch:02d} | Loss: {train_loss:.4f} | Val AUC-PR: {auc_pr:.4f} | Max Hardness: {max_h:.4f} | Time: {epoch_time:.1f}s")
+
             # 🛡️ IEEE LOGGER: Safely append metrics to the CSV on the hard drive
             if self.logger:
                 self.logger.log_epoch(epoch, train_loss, auc_pr, max_h, epoch_time)
 
             # 🧹 CRASH PREVENTION: Clear memory actively before next cycle
-            # 🧹 CRASH PREVENTION
             try:
                 del indices
             except NameError:
