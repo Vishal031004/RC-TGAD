@@ -340,8 +340,9 @@ class Trainer:
             print(f"Epoch {epoch} | Loss: {train_loss:.4f} | F1: {f1:.4f} | Time: {epoch_time:.1f}s")
 
             # 🛡️ IEEE LOGGER: Record epoch metrics
+            # 🛡️ IEEE LOGGER: Safely append metrics to the CSV on the hard drive
             if self.logger:
-                self.logger.log_epoch(epoch, train_loss, f1, epoch_time)
+                self.logger.log_epoch(epoch, train_loss, auc_pr, max_h, epoch_time)
 
             # 🧹 CRASH PREVENTION: Clear memory actively before next cycle
             # 🧹 CRASH PREVENTION
