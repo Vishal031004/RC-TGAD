@@ -140,6 +140,11 @@ class Trainer:
                 
                 for n in range(N):
                     global_idx = t_base_idx * N + n
+
+                    rag_cfg = self.config.get("rag", {})
+                    a1 = rag_cfg.get("alpha_1", 0.33)
+                    a2 = rag_cfg.get("alpha_2", 0.33)
+                    a3 = rag_cfg.get("alpha_3", 0.34)
                     
                     h_result = self.rag_scorer.score_hardness(
                         z=z_all_cpu[b, n],
@@ -148,7 +153,8 @@ class Trainer:
                         node_id=n,
                         graph=batch_data[0]["graph"],
                         t=t,
-                        ground_truth_label=int(y[b, n])
+                        ground_truth_label=int(y[b, n]),
+                        alphas=(a1, a2, a3) # ⚡ THE MISSING LINK!
                     )
                     
                     # ⚡ Check if the scorer returned a dictionary of parts or just the total float
