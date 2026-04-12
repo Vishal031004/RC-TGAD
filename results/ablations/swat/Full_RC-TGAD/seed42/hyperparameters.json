@@ -1,20 +1,20 @@
 {
     "model": {
-        "lstm_hidden": 64,
+        "lstm_hidden": 128,
         "lstm_layers": 2,
-        "gnn_out_dim": 64,
+        "gnn_out_dim": 128,
         "gnn_heads": 4,
         "dropout": 0.3,
-        "window_size": 30,
+        "window_size": 90,
         "d_in": 1,
         "num_nodes": 51
     },
     "rag": {
-        "vector_dim": 64,
+        "vector_dim": 128,
         "k_neighbors": 10,
-        "alpha_1": 0.33,
-        "alpha_2": 0.33,
-        "alpha_3": 0.34,
+        "alpha_1": 0.6,
+        "alpha_2": 0.1,
+        "alpha_3": 0.3,
         "gamma": 0.5
     },
     "curriculum": {
@@ -25,7 +25,7 @@
     },
     "training": {
         "epochs": 50,
-        "batch_size": 512,
+        "batch_size": 64,
         "lr": 0.001,
         "weight_decay": 0.001,
         "grad_clip": 1.0,
