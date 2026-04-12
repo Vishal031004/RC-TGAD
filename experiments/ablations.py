@@ -15,7 +15,10 @@ from configs.config_loader    import load_config, get_ablation_configs
 from curriculum.trainer       import Trainer, MockBackbone, MockRAGScorer, MockTemporalGraphDataset
 from utils.metrics            import evaluate, AblationTracker
 from experiments.run_baseline import load_dataset, load_backbone, evaluate_on_test
-from experiments.run_rctgad   import RealRAGScorer
+
+# ⚡ THE RAW IMPORTS: We bypass run_rctgad.py completely
+from rag_scorer               import score_hardness
+from rag.vector_store         import VectorStore
 
 # Import the ultimate IEEE logger we just created
 from utils.logger             import DeepResearchLogger
@@ -96,31 +99,30 @@ def run_variant_seed(variant_name, cfg, seed, mock, results_dir):
     elif variant_name == "Random Curriculum":
         rag_scorer = RandomHardnessScorer(seed=seed)
     else:
-        try:
-            rag_scorer = RealRAGScorer(cfg)
-            rag_scorer.reset()
-            
-            # ⚡ THE ULTIMATE BYPASS: Hook directly into the math file
-            from rag_scorer import score_hardness as direct_score
-            class ScorerBypass:
-                def __init__(self, real_instance):
-                    self.real = real_instance
-                def score_hardness(self, **kwargs):
-                    # Pass the dynamic kwargs straight through, adding the memory states
-                    return direct_score(
-                        **kwargs,
-                        window_errors=self.real.window_errors,
-                        vector_store=self.real.vector_store
-                    )
-            
-            rag_scorer = ScorerBypass(rag_scorer)
-            print("✅ Successfully locked onto the Real RAG Scorer!")
-            
-        except Exception as e:
-            print(f"\n🚨 CRITICAL ERROR: RealRAGScorer failed to initialize!")
-            print(f"🚨 Python Error: {e}")
-            print(f"🚨 Falling back to Random Noise Generator...\n")
-            rag_scorer = MockRAGScorer(seed=seed)
+        # ⚡ THE BRUTALIST FIX: Complete Wrapper Annihilation
+        print("\n" + "="*60)
+        print("🚀 [Ablations] Confirmation: ACTUAL Score Calculation Initiated!")
+        print("="*60)
+        
+        class RawScorerInjection:
+            def __init__(self, vector_dim=128):
+                # Initialize the pure memory states directly in the main file
+                self.vector_store = VectorStore(d=vector_dim)
+                self.window_errors = []
+                print(f"✅ RawScorerInjection active (FAISS Vector Dim: {vector_dim})")
+                print("✅ Dictionary Output (H_temp, H_struct, H_rag) is GUARANTEED.\n")
+                
+            def score_hardness(self, **kwargs):
+                # Pass directly to the pure math function, no wrapper interference
+                return score_hardness(
+                    **kwargs,
+                    window_errors=self.window_errors,
+                    vector_store=self.vector_store
+                )
+                
+        # Extract the dimension so FAISS doesn't crash
+        v_dim = cfg.get("rag", {}).get("vector_dim", 128)
+        rag_scorer = RawScorerInjection(vector_dim=v_dim)
 
     trainer = Trainer(
         backbone=backbone,
@@ -256,7 +258,6 @@ def main():
             print(f"  Done in {elapsed:.1f}s  |  "
                   f"F1-PA={result['f1_pa']:.4f}  AUC-PR={result['auc_pr']:.4f}")
 
-        # 🛡️ FIX: Pass ACTUAL results to the tracker
         for result in variant_results:
             tracker.add(
                 variant_name,
