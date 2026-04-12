@@ -99,7 +99,27 @@ def run_variant_seed(variant_name, cfg, seed, mock, results_dir):
         try:
             rag_scorer = RealRAGScorer(cfg)
             rag_scorer.reset()
-        except Exception:
+            
+            # ⚡ THE ULTIMATE BYPASS: Hook directly into the math file
+            from rag_scorer import score_hardness as direct_score
+            class ScorerBypass:
+                def __init__(self, real_instance):
+                    self.real = real_instance
+                def score_hardness(self, **kwargs):
+                    # Pass the dynamic kwargs straight through, adding the memory states
+                    return direct_score(
+                        **kwargs,
+                        window_errors=self.real.window_errors,
+                        vector_store=self.real.vector_store
+                    )
+            
+            rag_scorer = ScorerBypass(rag_scorer)
+            print("✅ Successfully locked onto the Real RAG Scorer!")
+            
+        except Exception as e:
+            print(f"\n🚨 CRITICAL ERROR: RealRAGScorer failed to initialize!")
+            print(f"🚨 Python Error: {e}")
+            print(f"🚨 Falling back to Random Noise Generator...\n")
             rag_scorer = MockRAGScorer(seed=seed)
 
     trainer = Trainer(
@@ -276,7 +296,7 @@ def main():
     with open(agg_path, "w") as f:
         json.dump(all_agg, f, indent=2)
 
-    latex   = generate_latex_table(all_agg, dataset_name)
+    latex    = generate_latex_table(all_agg, dataset_name)
     tex_path = os.path.join(results_dir, "paper_table.tex")
     with open(tex_path, "w") as f:
         f.write(latex)
