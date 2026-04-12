@@ -7,7 +7,7 @@ FIXED: Thread-safe locking for Multi-Threaded Trainer compatibility.
 import torch
 import numpy as np
 import threading
-from typing import Tuple, Optional, List, Union
+from typing import Tuple, Optional, List, Union, Dict
 from rag.vector_store import VectorStore
 from rag.hardness import compute_h_temp, compute_h_struct, compute_h_rag
 
@@ -30,7 +30,7 @@ def score_hardness(
     anomaly_source_id: Optional[int] = None,
     return_components: bool = False,
     **kwargs 
-) -> Union[float, Tuple[float, float, float, float]]:
+) -> Union[float, Dict[str, float]]:
     alpha_1, alpha_2, alpha_3 = alphas
 
     # 1. Compute H_temp using CURRENT history
@@ -47,7 +47,6 @@ def score_hardness(
     h_rag = compute_h_rag(z, vector_store, k=k_neighbors)
 
     # 🚦 ACQUIRE LOCK ONLY FOR WRITING
-    # This takes 0.001 seconds, completely eliminating the "Traffic Jam"
     with _scorer_lock:
         
         # 4. Safely modify the sliding window memory
@@ -67,7 +66,10 @@ def score_hardness(
         
         vector_store.add(z_np, label=ground_truth_label)
 
-    if return_components:
-        return H_clipped, h_temp, h_struct, h_rag
-        
-    return H_clipped
+    # ⚡ THE FIX: Return the precise dictionary so the Bulk CSV Writer can log every component!
+    return {
+        "total": float(H_clipped),
+        "temp": float(h_temp),
+        "struct": float(h_struct),
+        "rag": float(h_rag)
+    }
