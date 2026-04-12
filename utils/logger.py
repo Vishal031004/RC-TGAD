@@ -20,10 +20,10 @@ class DeepResearchLogger:
         with open(self.config_json, 'w') as f:
             json.dump(config_dict, f, indent=4)
             
-        # 2. Initialize Metrics CSV
+        # 2. Initialize Metrics CSV (⚡ CHANGED F1 TO AUC-PR)
         with open(self.metrics_csv, 'w', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow(['Epoch', 'Train_Loss', 'Val_F1', 'Time_Sec'])
+            writer.writerow(['Epoch', 'Train_Loss', 'Val_AUC_PR', 'Max_Hardness', 'Time_Sec'])
             
         # 3. Initialize Curriculum Scores CSV
         with open(self.scores_csv, 'w', newline='') as f:
@@ -52,12 +52,20 @@ class DeepResearchLogger:
             f.write(str(model))
         self.log_event("💾 Architecture details saved.")
             
-    def log_epoch(self, epoch, loss, val_f1, time_sec):
+    def log_epoch(self, epoch, loss, val_auc_pr, max_hardness, time_sec):
         """Writes the epoch metrics to the CSV for plotting later."""
         with open(self.metrics_csv, 'a', newline='') as f:
-            csv.writer(f).writerow([epoch, f"{loss:.6f}", f"{val_f1:.4f}", f"{time_sec:.2f}"])
+            # ⚡ Saves exact floats to CSV so you can graph them in Python/Excel later
+            csv.writer(f).writerow([epoch, f"{loss:.6f}", f"{val_auc_pr:.4f}", f"{max_hardness:.4f}", f"{time_sec:.2f}"])
 
     def log_curriculum_pacing(self, epoch, current_k, total_n, max_hardness):
         """Logs the pacing event for the Curriculum Scheduler."""
         percentage = (current_k / total_n) * 100
         self.log_event(f"📈 [Curriculum Update] Epoch {epoch} | Unlocked {current_k}/{total_n} samples ({percentage:.1f}%) | Max Hardness: {max_hardness:.4f}")
+
+    def log_curriculum_scores(self, detailed_scores):
+        """Bulk writes individual hardness scores to prevent Kaggle IO bottlenecks."""
+        with open(self.scores_csv, 'a', newline='') as f:
+            writer = csv.writer(f)
+            # detailed_scores is a list of lists: [[epoch, idx, h_temp, h_struct, h_rag, h_total], ...]
+            writer.writerows(detailed_scores)
