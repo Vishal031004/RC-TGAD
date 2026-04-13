@@ -1,3 +1,4 @@
+%%writefile /kaggle/working/Virtual-Focus-Group/curriculum/trainer.py
 """
 trainer.py — Unified Training Loop for RC-TGAD.
 Refactored for Unified Processing Unit [B, N, W, 1].
@@ -97,7 +98,7 @@ class Trainer:
 
     @torch.no_grad()
     def _compute_hardness_from_loss(self, current_epoch: int = 0) -> np.ndarray:
-        print("\n[Trainer] Computing hardness scores (Single-threaded GPU)...")        
+        print("\n[Trainer] Computing hardness scores (Pure GPU Batching)...")        
         self.backbone.eval()
         ds = self.dataset
         n_timesteps = len(ds)
@@ -115,7 +116,7 @@ class Trainer:
             batch_data = [ds[j] for j in range(i, end_i)]
             
             x = torch.stack([d["x"] for d in batch_data]).to(self.device)
-            y = torch.stack([d["y"] for d in batch_data])
+            y = torch.stack([d["y"] for d in batch_data]).to(self.device)
             graph_safe = DPGraphWrapper(batch_data[0]["graph"])
             
             z_all, x_hat_all = self.backbone(x, graph_safe) 
@@ -126,49 +127,35 @@ class Trainer:
                 for d in batch_data
             ]).unsqueeze(-1).to(self.device)
 
-            z_all_cpu = z_all.cpu()
-            x_hat_all_cpu = x_hat_all.cpu()
-            target_cpu = target.cpu()
-
-            B_real = x.shape[0]
+            # ⚡ YOUR BRILLIANT FIX: Dynamic weights from config!
+            rag_cfg = self.config.get("rag", {})
+            a1 = rag_cfg.get("alpha_1", 0.33)
+            a2 = rag_cfg.get("alpha_2", 0.33)
+            a3 = rag_cfg.get("alpha_3", 0.34)
             
-            # ⚡ TURBO FIX 1: Pure PyTorch Single-Threaded Loop
-            # No threads = No deadlocks. The GPU handles the speed natively.
-            for b in range(B_real):
-                t = batch_data[b]["t"]
+            # ⚡ TURBO FIX 1: Pure GPU Batched Loop
+            # NO MORE .cpu() TRANSFERS! Keep it on the GPU!
+            h_results = self.rag_scorer.score_hardness(
+                z=z_all,
+                x=target,
+                x_hat=x_hat_all,
+                y=y,
+                batch_data=batch_data,
+                alphas=(a1, a2, a3)
+            )
+            
+            # ⚡ Unpack the batch results and apply to all nodes in that snapshot
+            for b_idx, res in enumerate(h_results):
+                t = batch_data[b_idx]["t"]
                 t_base_idx = (t - ds.window) // getattr(ds, 'stride', 1)
+                
+                h_total = res.get("total", 0.0)
+                h_temp = res.get("temp", 0.0)
+                h_struct = res.get("struct", 0.0)
+                h_rag = res.get("rag", 0.0)
                 
                 for n in range(N):
                     global_idx = t_base_idx * N + n
-
-                    # ⚡ YOUR BRILLIANT FIX: Dynamic weights from config!
-                    rag_cfg = self.config.get("rag", {})
-                    a1 = rag_cfg.get("alpha_1", 0.33)
-                    a2 = rag_cfg.get("alpha_2", 0.33)
-                    a3 = rag_cfg.get("alpha_3", 0.34)
-                    
-                    h_result = self.rag_scorer.score_hardness(
-                        z=z_all_cpu[b, n],
-                        x=target_cpu[b, n],
-                        x_hat=x_hat_all_cpu[b, n],
-                        node_id=n,
-                        graph=batch_data[0]["graph"],
-                        t=t,
-                        ground_truth_label=int(y[b, n]),
-                        alphas=(a1, a2, a3), # ⚡ Now it actually obeys the Kaggle command line
-                        return_components=True
-                    )
-                    
-                    # ⚡ Check if the scorer returned a dictionary of parts or just the total float
-                    if isinstance(h_result, dict):
-                        h_total = h_result.get("total", 0.0)
-                        h_temp = h_result.get("temp", 0.0)
-                        h_struct = h_result.get("struct", 0.0)
-                        h_rag = h_result.get("rag", 0.0)
-                    else:
-                        h_total = float(h_result)
-                        h_temp, h_struct, h_rag = 0.0, 0.0, 0.0 # Fallback
-                        
                     all_scores[global_idx] = h_total
                     
                     # Store for bulk logging
@@ -178,7 +165,7 @@ class Trainer:
                             round(h_temp, 4), round(h_struct, 4), round(h_rag, 4), round(h_total, 4)
                         ])
             
-            pbar.update(B_real)
+            pbar.update(x.shape[0])
             
         pbar.close()
 
