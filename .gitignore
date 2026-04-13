@@ -8,4 +8,4 @@ data/
 *.csv
 *.zip
 checkpoints/
-results/
+results/curriculum_scores.csv
