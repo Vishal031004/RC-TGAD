@@ -1,1 +1,1 @@
-Epoch,Train_Loss,Val_F1,Time_Sec
+Epoch,Train_Loss,Val_AUC_PR,Max_Hardness,Time_Sec
