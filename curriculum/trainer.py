@@ -1,10 +1,6 @@
-%%writefile /kaggle/working/Virtual-Focus-Group/curriculum/trainer.py
 """
 trainer.py — Unified Training Loop for RC-TGAD.
-Refactored for Unified Processing Unit [B, N, W, 1].
-Includes DataParallel Graph-Wrapper Fix to prevent silent deadlocks.
-Includes AMP (Mixed Precision) and Single-Threaded GPU optimization for maximum speed.
-Includes explicit Garbage Collection to prevent Kaggle RAM spikes.
+Includes AMP (Mixed Precision) and Node-Level Vectorized Processing.
 """
 
 import os
@@ -17,9 +13,6 @@ from typing import Dict, List, Tuple, Optional
 
 from curriculum.scheduler import get_batch_fast, pacing
 
-# ─────────────────────────────────────────────────────────────────────────────
-# MOCK CLASSES
-# ─────────────────────────────────────────────────────────────────────────────
 class MockBackbone(nn.Module):
     def __init__(self, d_in: int = 10, d_z: int = 64, num_nodes: int = 10):
         super().__init__()
@@ -41,39 +34,18 @@ class MockTemporalGraphDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         return {}
 
-# ─────────────────────────────────────────────────────────────────────────────
-# THE DATAPARALLEL SHIELD
-# ─────────────────────────────────────────────────────────────────────────────
 class DPGraphWrapper:
-    """
-    Tricks nn.DataParallel into NOT slicing the graph in half.
-    Since it's a custom object, DataParallel will pass references safely to all GPUs.
-    """
     def __init__(self, data):
         self.edge_index = data.edge_index
         self.edge_attr = getattr(data, 'edge_attr', None)
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TRAINER
-# ─────────────────────────────────────────────────────────────────────────────
 class Trainer:
-    def __init__(
-        self,
-        backbone,
-        rag_scorer,
-        dataset,
-        config: Dict,
-        use_curriculum: bool = True,
-        device: str = "cuda" if torch.cuda.is_available() else "cpu",
-        logger=None  # 🛡️ IEEE PAPER LOGGER
-    ):
+    def __init__(self, backbone, rag_scorer, dataset, config: Dict, use_curriculum: bool = True, device: str = "cuda", logger=None):
         self.raw_backbone   = backbone
         self.backbone       = backbone.to(device)
         
         if device == "cuda" and torch.cuda.device_count() > 1:
             self.backbone = nn.DataParallel(self.backbone)
-            print(f"[Trainer] Using {torch.cuda.device_count()} GPUs via DataParallel")
             
         self.rag_scorer     = rag_scorer
         self.dataset        = dataset
@@ -88,17 +60,11 @@ class Trainer:
             weight_decay=config.get("weight_decay", 1e-5)
         )
 
-        self.history = {
-            "train_loss": [],
-            "val_f1":     [],
-            "val_auc_pr": [],
-            "pct_data":   [],
-            "max_hardness": []
-        }
+        self.history = {"train_loss": [], "val_f1": [], "val_auc_pr": [], "pct_data": [], "max_hardness": []}
 
     @torch.no_grad()
     def _compute_hardness_from_loss(self, current_epoch: int = 0) -> np.ndarray:
-        print("\n[Trainer] Computing hardness scores (Pure GPU Batching)...")        
+        print("\n[Trainer] Computing hardness scores (Node-Level GPU Batching)...")        
         self.backbone.eval()
         ds = self.dataset
         n_timesteps = len(ds)
@@ -106,72 +72,67 @@ class Trainer:
         batch_size = self.config.get("batch_size", 32) * 2 
         
         all_scores = np.zeros(n_timesteps * N, dtype=np.float32)
-        detailed_scores = [] # ⚡ Holds the data for the Bulk Write
+        detailed_scores = [] 
         
         from tqdm import tqdm
         pbar = tqdm(total=n_timesteps, desc="Hardness Eval", unit="steps")
         
-        for i in range(0, n_timesteps, batch_size):
-            end_i = min(i + batch_size, n_timesteps)
-            batch_data = [ds[j] for j in range(i, end_i)]
-            
-            x = torch.stack([d["x"] for d in batch_data]).to(self.device)
-            y = torch.stack([d["y"] for d in batch_data]).to(self.device)
-            graph_safe = DPGraphWrapper(batch_data[0]["graph"])
-            
-            z_all, x_hat_all = self.backbone(x, graph_safe) 
-            
-            # Target the FUTURE step
-            target = torch.stack([
-                torch.tensor(ds.signals[d["t"]], dtype=torch.float32) 
-                for d in batch_data
-            ]).unsqueeze(-1).to(self.device)
+        try:
+            for i in range(0, n_timesteps, batch_size):
+                end_i = min(i + batch_size, n_timesteps)
+                batch_data = [ds[j] for j in range(i, end_i)]
+                
+                x = torch.stack([d["x"] for d in batch_data]).to(self.device)
+                y = torch.stack([d["y"] for d in batch_data]).to(self.device)
+                graph_safe = DPGraphWrapper(batch_data[0]["graph"])
+                
+                z_all, x_hat_all = self.backbone(x, graph_safe) 
+                
+                target = torch.stack([
+                    torch.tensor(ds.signals[d["t"]], dtype=torch.float32) 
+                    for d in batch_data
+                ]).unsqueeze(-1).to(self.device)
 
-            # ⚡ YOUR BRILLIANT FIX: Dynamic weights from config!
-            rag_cfg = self.config.get("rag", {})
-            a1 = rag_cfg.get("alpha_1", 0.33)
-            a2 = rag_cfg.get("alpha_2", 0.33)
-            a3 = rag_cfg.get("alpha_3", 0.34)
-            
-            # ⚡ TURBO FIX 1: Pure GPU Batched Loop
-            # NO MORE .cpu() TRANSFERS! Keep it on the GPU!
-            h_results = self.rag_scorer.score_hardness(
-                z=z_all,
-                x=target,
-                x_hat=x_hat_all,
-                y=y,
-                batch_data=batch_data,
-                alphas=(a1, a2, a3)
-            )
-            
-            # ⚡ Unpack the batch results and apply to all nodes in that snapshot
-            for b_idx, res in enumerate(h_results):
-                t = batch_data[b_idx]["t"]
-                t_base_idx = (t - ds.window) // getattr(ds, 'stride', 1)
+                rag_cfg = self.config.get("rag", {})
+                a1 = rag_cfg.get("alpha_1", 0.33)
+                a2 = rag_cfg.get("alpha_2", 0.33)
+                a3 = rag_cfg.get("alpha_3", 0.34)
                 
-                h_total = res.get("total", 0.0)
-                h_temp = res.get("temp", 0.0)
-                h_struct = res.get("struct", 0.0)
-                h_rag = res.get("rag", 0.0)
+                h_results = self.rag_scorer.score_hardness(
+                    z=z_all, x=target, x_hat=x_hat_all, y=y,
+                    batch_data=batch_data, alphas=(a1, a2, a3)
+                )
                 
-                for n in range(N):
-                    global_idx = t_base_idx * N + n
-                    all_scores[global_idx] = h_total
+                # ⚡ Safely pull the distinct score for EVERY node
+                for b_idx, node_res_list in enumerate(h_results):
+                    t = batch_data[b_idx]["t"]
+                    t_base_idx = (t - ds.window) // getattr(ds, 'stride', 1)
                     
-                    # Store for bulk logging
-                    if self.logger:
-                        detailed_scores.append([
-                            current_epoch, global_idx, 
-                            round(h_temp, 4), round(h_struct, 4), round(h_rag, 4), round(h_total, 4)
-                        ])
+                    for n in range(N):
+                        global_idx = t_base_idx * N + n
+                        res = node_res_list[n]
+                        
+                        all_scores[global_idx] = res["total"]
+                        
+                        if self.logger:
+                            detailed_scores.append([
+                                current_epoch, global_idx, 
+                                round(res["temp"], 4), round(res["struct"], 4), round(res["rag"], 4), round(res["total"], 4)
+                            ])
+                
+                pbar.update(x.shape[0])
+                
+        except KeyboardInterrupt:
+            print("\n🛑 KAGGLE STOP BUTTON DETECTED! Salvaging data...")
             
-            pbar.update(x.shape[0])
+        finally:
+            pbar.close()
+            if self.logger and detailed_scores:
+                self.logger.log_curriculum_scores(detailed_scores)
+                print(f"✅ SUCCESSFULLY SAVED {len(detailed_scores)} ROWS TO CSV!")
             
-        pbar.close()
-
-        # ⚡ Execute the lightning-fast bulk write to the CSV
-        if self.logger and detailed_scores:
-            self.logger.log_curriculum_scores(detailed_scores)
+            if len(detailed_scores) < (n_timesteps * N * 0.9):
+                raise RuntimeError("Pipeline safely halted for user inspection.")
 
         score_min, score_max = all_scores.min(), all_scores.max()
         score_range = score_max - score_min
@@ -184,7 +145,6 @@ class Trainer:
         return all_scores
 
     def _train_epoch(self, indices, batch_size: int) -> float:
-        # ⚡ TURBO FIX 2: Automatic Mixed Precision (AMP)
         from torch.amp import autocast, GradScaler
         scaler = GradScaler('cuda')
         
@@ -217,7 +177,6 @@ class Trainer:
             
             self.optimizer.zero_grad()
             
-            # Run forward pass in 16-bit to double GPU speed
             with autocast('cuda'):
                 z_all, x_hat_all = self.backbone(x, graph_safe)
                 
@@ -229,7 +188,6 @@ class Trainer:
                 if is_full_dataset:
                     loss = nn.MSELoss()(x_hat_all, target)
                 else:
-                    # ⚡ TURBO FIX 3: Vectorized Jagged Loss
                     B_curr = len(current_t_batch)
                     mask = torch.zeros((B_curr, N), dtype=torch.bool)
                     for b, t_idx in enumerate(current_t_batch):
@@ -306,18 +264,13 @@ class Trainer:
 
         for epoch in range(epochs):
             t_start = time.time()
-            max_h = 1.0 # Default fallback
+            max_h = 1.0 
             
             if self.use_curriculum:
                 indices = get_batch_fast(hardness_array, epoch, k_warmup)
                 current_k = len(indices)
+                max_h = float(np.max(hardness_array[indices])) if current_k > 0 else 0.0
                 
-                if current_k > 0:
-                    max_h = float(np.max(hardness_array[indices]))
-                else:
-                    max_h = 0.0
-                
-                # 🛡️ IEEE LOGGER: Record pacing details
                 if self.logger:
                     self.logger.log_curriculum_pacing(epoch, current_k, n_samples, max_h)
 
@@ -332,7 +285,6 @@ class Trainer:
             if val_dataset is not None and (epoch % 5 == 0 or epoch == epochs - 1):
                 f1, auc_pr = self._validate(val_dataset)
 
-            # ⚡ UPDATE HISTORY DICT
             self.history["train_loss"].append(train_loss)
             self.history["val_f1"].append(f1)
             self.history["val_auc_pr"].append(auc_pr)
@@ -340,15 +292,11 @@ class Trainer:
             self.history["max_hardness"].append(max_h)
 
             epoch_time = time.time() - t_start
-            
-            # ⚡ CLEAN PRINT STATEMENT
             print(f"Epoch {epoch:02d} | Loss: {train_loss:.4f} | Val AUC-PR: {auc_pr:.4f} | Max Hardness: {max_h:.4f} | Time: {epoch_time:.1f}s")
 
-            # 🛡️ IEEE LOGGER: Safely append metrics to the CSV on the hard drive
             if self.logger:
                 self.logger.log_epoch(epoch, train_loss, auc_pr, max_h, epoch_time)
 
-            # 🧹 CRASH PREVENTION: Clear memory actively before next cycle
             try:
                 del indices
             except NameError:
@@ -356,7 +304,6 @@ class Trainer:
             gc.collect()
             torch.cuda.empty_cache()
 
-        # 💽 THE FINAL STEP: Prove the files exist before shutting down!
         if self.logger:
             self.logger.verify_disk_writes()
 

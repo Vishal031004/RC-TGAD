@@ -73,3 +73,6 @@ def score_hardness(
         "struct": float(h_struct),
         "rag": float(h_rag)
     }
+
+def score_dataset(*args, **kwargs):
+    pass
