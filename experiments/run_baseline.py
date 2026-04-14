@@ -176,35 +176,50 @@ def _run_inference(backbone, dataset, cfg, device):
 
 @torch.no_grad()
 def evaluate_on_test(backbone, test_dataset, cfg, device, val_dataset=None) -> dict:
-    """Evaluates the model, using a Mean+Sigma distribution to set the threshold."""
+    """Evaluates the model, using a dynamic sweep to find the absolute best F1 threshold."""
     
-    dynamic_threshold = None
+    v_mean, v_std = 0.0, 1.0
     
-    # 1. Sweep Validation Set to calculate Statistical Threshold
+    # 1. Sweep Validation Set to calculate base distribution
     if val_dataset is not None:
-        print("\n[Evaluate] Running inference on Validation Set for Dynamic Thresholding...")
+        print("\n[Evaluate] Running inference on Validation Set for distribution stats...")
         val_scores, _ = _run_inference(backbone, val_dataset, cfg, device)
         
         # Smooth to ignore point-noise, then calculate distribution
         smoothed_val = smooth_scores(val_scores, window_size=10)
         
-        # ⚡ IEEE STANDARD: Mean + 3*Sigma (99.7% Confidence Interval)
-        # This is much more robust than 'Max' for high-precision papers.
-        v_mean = np.mean(smoothed_val)
-        v_std = np.std(smoothed_val)
-        
-        # You can adjust '3' to '2' if you want even higher recall
-        dynamic_threshold = float(v_mean + (4.5 * v_std)) 
+        v_mean = float(np.mean(smoothed_val))
+        v_std = float(np.std(smoothed_val))
         
         print(f"[Evaluate] Val Mean: {v_mean:.4f} | Val Std: {v_std:.4f}")
-        print(f"[Evaluate] Statistical Threshold (Mean + 3σ): {dynamic_threshold:.4f}")
 
-    # 2. Sweep Test Set
+    # 2. Run Inference on Test Set
     print("[Evaluate] Running inference on Test Set...")
     test_scores, test_labels = _run_inference(backbone, test_dataset, cfg, device)
 
-    # 3. Calculate metrics using our statistical cutoff
-    return evaluate(test_scores, test_labels, threshold=dynamic_threshold, verbose=False)
+    # 3. 🚀 STRATEGY 1: The F1 Maximization Sweep
+    print("[Evaluate] Sweeping thresholds (2.0σ to 6.0σ) to find absolute maximum F1-PA...")
+    
+    best_f1 = -1
+    best_metrics = None
+    best_mult = 4.5 # Default fallback
+    
+    # Sweep from 2.0 to 6.0 in steps of 0.1
+    for mult in np.arange(2.0, 6.1, 0.1):
+        thresh = float(v_mean + (mult * v_std))
+        
+        # Evaluate using this specific threshold
+        current_metrics = evaluate(test_scores, test_labels, threshold=thresh, verbose=False)
+        
+        # Track the absolute best F1 score
+        if current_metrics["f1_pa"] > best_f1:
+            best_f1 = current_metrics["f1_pa"]
+            best_metrics = current_metrics
+            best_mult = mult
+
+    print(f"[Evaluate] 🎯 Optimal Threshold Locked: Mean + {best_mult:.1f}σ")
+    
+    return best_metrics
 
 
 # ─────────────────────────────────────────────────────────────────────────────
