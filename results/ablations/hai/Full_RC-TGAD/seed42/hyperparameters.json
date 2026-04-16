@@ -1,0 +1,55 @@
+{
+    "model": {
+        "lstm_hidden": 128,
+        "lstm_layers": 2,
+        "gnn_out_dim": 128,
+        "gnn_heads": 4,
+        "dropout": 0.1,
+        "window_size": 30,
+        "d_in": 1,
+        "num_nodes": 51
+    },
+    "rag": {
+        "vector_dim": 128,
+        "k_neighbors": 3,
+        "alpha_1": 0.4,
+        "alpha_2": 0.3,
+        "alpha_3": 0.3,
+        "gamma": 0.5
+    },
+    "curriculum": {
+        "enabled": true,
+        "k_warmup": 30,
+        "safety_floor_ratio": 0.05,
+        "fallback_ratio": 0.3
+    },
+    "training": {
+        "epochs": 35,
+        "batch_size": 32,
+        "lr": 0.001,
+        "weight_decay": 1e-05,
+        "grad_clip": 1.0,
+        "device": "cuda",
+        "seed": 42,
+        "val_every": 5,
+        "threshold": null
+    },
+    "data": {
+        "dataset": "hai",
+        "data_dir": "/kaggle/input/datasets/icsdataset/hai-security-dataset/hai-23.05/",
+        "stride": 2,
+        "train_split": 0.7,
+        "val_split": 0.15,
+        "test_split": 0.15,
+        "normalize": true,
+        "graph_threshold": 0.05
+    },
+    "logging": {
+        "use_wandb": false,
+        "wandb_project": "rc-tgad",
+        "run_name": "Full_RC-TGAD_seed42",
+        "checkpoint_dir": "checkpoints",
+        "save_best_only": true,
+        "log_every": 5
+    }
+}

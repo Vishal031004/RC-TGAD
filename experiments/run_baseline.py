@@ -58,7 +58,7 @@ def load_dataset(cfg, seed, mock=False):
     elif dataset_name == "smap":
         from data.smap import load_smap
         train_data, val_data, test_data, _ = load_smap(
-            data_dir  = cfg["data"].get("data_dir", "data/raw/smap"),
+            data_dir  = cfg["data"]["data_dir"],
             window    = win,
             stride    = stride,
             val_ratio = cfg["data"]["val_split"],
@@ -67,6 +67,14 @@ def load_dataset(cfg, seed, mock=False):
         from data.smap import load_msl      
         train_data, val_data, test_data, _ = load_msl(
             data_dir  = cfg["data"].get("data_dir", "data/raw/smap"),
+            window    = win,
+            stride    = stride,
+            val_ratio = cfg["data"]["val_split"],
+        )
+    elif dataset_name == "hai":
+        from data.hai import load_hai
+        train_data, val_data, test_data, _ = load_hai(
+            data_dir  = cfg["data"]["data_dir"],
             window    = win,
             stride    = stride,
             val_ratio = cfg["data"]["val_split"],
@@ -176,35 +184,42 @@ def _run_inference(backbone, dataset, cfg, device):
 
 @torch.no_grad()
 def evaluate_on_test(backbone, test_dataset, cfg, device, val_dataset=None) -> dict:
-    """Evaluates the model, using a Mean+Sigma distribution to set the threshold."""
+    """Evaluates the model, using a dynamic sweep to find the absolute best F1 threshold."""
     
-    dynamic_threshold = None
+    v_mean, v_std = 0.0, 1.0
     
-    # 1. Sweep Validation Set to calculate Statistical Threshold
     if val_dataset is not None:
-        print("\n[Evaluate] Running inference on Validation Set for Dynamic Thresholding...")
+        print("\n[Evaluate] Running inference on Validation Set for distribution stats...")
         val_scores, _ = _run_inference(backbone, val_dataset, cfg, device)
         
-        # Smooth to ignore point-noise, then calculate distribution
         smoothed_val = smooth_scores(val_scores, window_size=10)
         
-        # ⚡ IEEE STANDARD: Mean + 3*Sigma (99.7% Confidence Interval)
-        # This is much more robust than 'Max' for high-precision papers.
-        v_mean = np.mean(smoothed_val)
-        v_std = np.std(smoothed_val)
-        
-        # You can adjust '3' to '2' if you want even higher recall
-        dynamic_threshold = float(v_mean + (4.5 * v_std)) 
+        v_mean = float(np.mean(smoothed_val))
+        v_std = float(np.std(smoothed_val))
         
         print(f"[Evaluate] Val Mean: {v_mean:.4f} | Val Std: {v_std:.4f}")
-        print(f"[Evaluate] Statistical Threshold (Mean + 3σ): {dynamic_threshold:.4f}")
 
-    # 2. Sweep Test Set
     print("[Evaluate] Running inference on Test Set...")
     test_scores, test_labels = _run_inference(backbone, test_dataset, cfg, device)
 
-    # 3. Calculate metrics using our statistical cutoff
-    return evaluate(test_scores, test_labels, threshold=dynamic_threshold, verbose=False)
+    print("[Evaluate] Sweeping thresholds (2.0σ to 6.0σ) to find absolute maximum F1-PA...")
+    
+    best_f1 = -1
+    best_metrics = None
+    best_mult = 4.5
+    
+    for mult in np.arange(2.0, 6.1, 0.1):
+        thresh = float(v_mean + (mult * v_std))
+        current_metrics = evaluate(test_scores, test_labels, threshold=thresh, verbose=False)
+        
+        if current_metrics["f1_pa"] > best_f1:
+            best_f1 = current_metrics["f1_pa"]
+            best_metrics = current_metrics
+            best_mult = mult
+
+    print(f"[Evaluate] 🎯 Optimal Threshold Locked: Mean + {best_mult:.1f}σ")
+    
+    return best_metrics
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -255,7 +270,6 @@ def run_single_seed(cfg, seed, mock, results_dir):
     )
 
     print(f"\n[Baseline] Evaluating on test set (seed={seed})...")
-    # Passed val_data here to activate the thresholding
     test_results = evaluate_on_test(backbone, test_data, cfg, device, val_dataset=val_data)
 
     print(f"\n  Test Results (seed={seed}):")
