@@ -65,14 +65,19 @@ def load_wadi(data_dir: str = "data/raw", window: int = 60, stride: int = 2, val
 
     test_sig = attack_smooth
     
-    # Handle WADI's -1 labels
-    raw_labels_test = attack_df[label_col].values
-    if -1 in raw_labels_test:
-        row_labels_test = np.where(raw_labels_test == -1, 1, 0).astype(np.int64)
-    else:
-        row_labels_test = raw_labels_test.astype(np.int64)
-        
-    test_lbl = np.repeat(row_labels_test[:, None], test_sig.shape[1], axis=1)
+    # ==========================================
+    # 🛡️ FIX: Handle WADI's rogue text rows in labels
+    # ==========================================
+    print(f"🎯 Scrubbing text from label column: {label_col}")
+    
+    # 1. Force the column to numeric. Any leftover text sentences become NaN.
+    clean_labels = pd.to_numeric(attack_df[label_col], errors='coerce')
+    
+    # 2. Fill the NaNs with 1 (WADI's default code for "Normal")
+    clean_labels = clean_labels.fillna(1).values
+    
+    # 3. WADI uses -1 for Attack. Map -1 -> 1 (Attack), everything else -> 0 (Normal)
+    row_labels_test = np.where(clean_labels == -1, 1, 0).astype(np.int64)
 
     # ==========================================
     # 🛡️ REMOVE ZERO-VARIANCE FEATURES (Computed on Train ONLY)
