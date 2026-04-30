@@ -71,6 +71,16 @@ def load_dataset(cfg, seed, mock=False):
             stride    = stride,
             val_ratio = cfg["data"]["val_split"],
         )
+    # 🛡️ ADDED WADI ROUTING HERE
+    elif dataset_name == "wadi":
+        from data.wadi import load_wadi
+        train_data, val_data, test_data, _ = load_wadi(
+            data_dir  = cfg["data"]["data_dir"],
+            window    = win,
+            stride    = stride,
+            val_ratio = cfg["data"]["val_split"],
+            graph_threshold = cfg["data"].get("graph_threshold", 0.1)
+        )
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
 
