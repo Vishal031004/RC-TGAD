@@ -1,4 +1,5 @@
 import os
+import gc
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -9,7 +10,7 @@ def load_wadi(data_dir: str = "data/raw", window: int = 60, stride: int = 2, val
     """
     Direct-from-Raw WADI Loader.
     Architecturally cloned from swat.py, featuring Causal Smoothing, Dead-Sensor Dropping, 
-    and RobustScaling, while handling WADI's -1 labels and NaN dropouts.
+    RobustScaling, Memory Rescue, and FOOLPROOF majority-class label detection.
     """
     clean_dir = Path(data_dir)
     normal_path = clean_dir / "WADI_14days_new.csv"
@@ -17,43 +18,81 @@ def load_wadi(data_dir: str = "data/raw", window: int = 60, stride: int = 2, val
 
     print(f"\n🌊 [WADI Loader] Loading RAW Data | Val Ratio: {val_ratio}")
 
-    # WADI sometimes has units in row 1, skipping it ensures clean float conversion
-    try:
-        normal_df = pd.read_csv(normal_path, sep=",", low_memory=False)
-    except:
+    # ==========================================
+    # 🛡️ 1. ACTIVE HEADER HUNTER & LOAD
+    # ==========================================
+    normal_df = pd.read_csv(normal_path, sep=",", low_memory=False)
+    clean_normal_cols = [str(c).replace('\\', '').strip().upper() for c in normal_df.columns]
+    if '1_AIT_001_PV' not in clean_normal_cols:
+        print("⚠️ Bad headers detected in Normal data. Shifting down 1 row...")
         normal_df = pd.read_csv(normal_path, sep=",", header=1, low_memory=False)
-        
-    try:
-        attack_df = pd.read_csv(attack_path, sep=",", low_memory=False)
-    except:
+    
+    attack_df = pd.read_csv(attack_path, sep=",", low_memory=False)
+    clean_attack_cols = [str(c).replace('\\', '').strip().upper() for c in attack_df.columns]
+    if '1_AIT_001_PV' not in clean_attack_cols:
+        print("⚠️ Garbage top row detected in Attack data. Shifting headers down 1 row...")
         attack_df = pd.read_csv(attack_path, sep=",", header=1, low_memory=False)
 
-    normal_df.columns = normal_df.columns.str.strip()
-    attack_df.columns = attack_df.columns.str.strip()
+    # ==========================================
+    # 🛡️ 2. AGGRESSIVE COLUMN ALIGNMENT
+    # ==========================================
+    normal_df.columns = [str(c).replace('\\', '').strip().upper() for c in normal_df.columns]
+    attack_df.columns = [str(c).replace('\\', '').strip().upper() for c in attack_df.columns]
 
-    # 1. Identify the weird WADI attack label column dynamically
-    label_cols = [c for c in attack_df.columns if 'label' in str(c).lower() or 'attack' in str(c).lower()]
+    label_cols = [c for c in attack_df.columns if 'LABEL' in c or 'ATTACK' in c]
     label_col = label_cols[0] if label_cols else attack_df.columns[-1]
     
-    # 2. Define Features (drop metadata)
-    drop_cols = ["Row", "Date", "Time", label_col, "Timestamp"]
+    drop_cols = ["ROW", "DATE", "TIME", label_col, "TIMESTAMP"]
     feature_cols = [c for c in normal_df.columns if c in attack_df.columns and c not in drop_cols]
+    
+    print(f"🔗 [WADI Alignment] Successfully locked onto {len(feature_cols)} sensor columns!")
 
-    # 🛡️ NaN Scrubber & Forward/Backward Fill (WADI has LOTS of these)
+    # ==========================================
+    # 🛡️ 3. NaN SCRUBBER
+    # ==========================================
     print("🩹 Patching offline WADI sensor gaps...")
     for df in [normal_df, attack_df]:
         df[feature_cols] = df[feature_cols].replace([np.inf, -np.inf], np.nan)
         df[feature_cols] = df[feature_cols].ffill().bfill().fillna(0)
 
     # ==========================================
-    # 🛡️ CAUSAL SMOOTHING
+    # 🛡️ 4. FOOLPROOF LABEL EXTRACTION
+    # ==========================================
+    print(f"🎯 Scrubbing text from label column: {label_col}")
+    clean_labels = pd.to_numeric(attack_df[label_col], errors='coerce')
+    valid_labels = clean_labels.dropna().values
+    
+    # Dynamically find the majority class (Normal operation)
+    unique_vals, counts = np.unique(valid_labels, return_counts=True)
+    normal_val = unique_vals[np.argmax(counts)]
+    print(f"🕵️ Detected '{normal_val}' as the Normal baseline. Everything else is an Attack!")
+
+    clean_labels = clean_labels.fillna(normal_val).values
+    row_labels_test = np.where(clean_labels != normal_val, 1, 0).astype(np.int64)
+    print(f"🚨 Successfully found {row_labels_test.sum()} attack moments in the test set!")
+
+    # ==========================================
+    # 🛡️ 5. CAUSAL SMOOTHING
     # ==========================================
     print("🌊 Applying causal smoothing (Shifted Rolling Mean)...")
     normal_smooth = normal_df[feature_cols].rolling(window=5).mean().shift(1).fillna(0).values.astype(np.float32)
     attack_smooth = attack_df[feature_cols].rolling(window=5).mean().shift(1).fillna(0).values.astype(np.float32)
 
     # ==========================================
-    # 🛡️ CHRONOLOGICAL SPLIT
+    # 🛡️ 6. MEMORY RESCUE (GC & DOWNSAMPLING)
+    # ==========================================
+    print("🧹 Triggering Garbage Collection & Downsampling to save Kaggle RAM...")
+    del normal_df
+    del attack_df
+    gc.collect() 
+
+    D_RATE = 5 
+    normal_smooth = normal_smooth[::D_RATE]
+    attack_smooth = attack_smooth[::D_RATE]
+    row_labels_test = row_labels_test[::D_RATE]
+
+    # ==========================================
+    # 🛡️ 7. CHRONOLOGICAL SPLIT
     # ==========================================
     split_idx = int(len(normal_smooth) * (1 - val_ratio))
     
@@ -64,36 +103,27 @@ def load_wadi(data_dir: str = "data/raw", window: int = 60, stride: int = 2, val
     val_lbl = np.zeros((len(val_sig), len(feature_cols)), dtype=np.int64)
 
     test_sig = attack_smooth
-    
-    # ==========================================
-    # 🛡️ FIX: Handle WADI's rogue text rows in labels
-    # ==========================================
-    print(f"🎯 Scrubbing text from label column: {label_col}")
-    
-    # 1. Force the column to numeric. Any leftover text sentences become NaN.
-    clean_labels = pd.to_numeric(attack_df[label_col], errors='coerce')
-    
-    # 2. Fill the NaNs with 1 (WADI's default code for "Normal")
-    clean_labels = clean_labels.fillna(1).values
-    
-    # 3. WADI uses -1 for Attack. Map -1 -> 1 (Attack), everything else -> 0 (Normal)
-    row_labels_test = np.where(clean_labels == -1, 1, 0).astype(np.int64)
+    test_lbl = np.repeat(row_labels_test[:, None], test_sig.shape[1], axis=1)
 
     # ==========================================
-    # 🛡️ REMOVE ZERO-VARIANCE FEATURES (Computed on Train ONLY)
+    # 🛡️ 8. REMOVE ZERO-VARIANCE FEATURES
     # ==========================================
     print("🧠 Filtering zero-variance features...")
     stds = train_sig.std(axis=0)
     valid_idx = np.where(stds > 1e-8)[0]
     
-    print(f"Removed {len(feature_cols) - len(valid_idx)} dead sensors.")
     train_sig = train_sig[:, valid_idx]
     val_sig = val_sig[:, valid_idx]
     test_sig = test_sig[:, valid_idx]
+    
+    train_lbl = train_lbl[:, valid_idx]
+    val_lbl = val_lbl[:, valid_idx]
+    test_lbl = test_lbl[:, valid_idx]
+    
     feature_cols = [feature_cols[i] for i in valid_idx]
 
     # ==========================================
-    # 🛡️ ROBUST SCALING & CLIPPING (Fitted on Train ONLY)
+    # 🛡️ 9. ROBUST SCALING & CLIPPING
     # ==========================================
     print("⚖️ Applying Robust Scaling and Hard Clipping [-5, 5]...")
     scaler = RobustScaler()
@@ -105,11 +135,10 @@ def load_wadi(data_dir: str = "data/raw", window: int = 60, stride: int = 2, val
     val_sig   = np.clip(val_sig, -5.0, 5.0).astype(np.float32)
     test_sig  = np.clip(test_sig, -5.0, 5.0).astype(np.float32)
 
-    # Pass dummy normalizers to BaseDataset
     dummy_mean = np.zeros(train_sig.shape[1], dtype=np.float32)
     dummy_std = np.ones(train_sig.shape[1], dtype=np.float32)
 
-    # Create Datasets
+    print("🚀 Building Torch Datasets (Memory usage stable)...")
     train_ds = BaseTimeSeriesDataset(
         train_sig, train_lbl, window=window, stride=stride,
         norm_mean=dummy_mean, norm_std=dummy_std
@@ -126,9 +155,5 @@ def load_wadi(data_dir: str = "data/raw", window: int = 60, stride: int = 2, val
         norm_mean=dummy_mean, norm_std=dummy_std,
         graph=train_ds.graph
     )
-
-    print(f"[Dataset] Train samples: {len(train_ds):,}")
-    print(f"[Dataset] Val samples:   {len(val_ds):,}")
-    print(f"[Dataset] Test samples:  {len(test_ds):,}\n")
 
     return train_ds, val_ds, test_ds, feature_cols

@@ -2,7 +2,7 @@
 
 Total Model Parameters: 233,345
 Input Node Features (d_in): 1
-Graph Nodes (Sensors): 51
+Graph Nodes (Sensors): 120
 
 === DETAILED PYTORCH MODULE ===
 Backbone(
