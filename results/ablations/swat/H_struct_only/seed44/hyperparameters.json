@@ -1,0 +1,55 @@
+{
+    "model": {
+        "lstm_hidden": 128,
+        "lstm_layers": 2,
+        "gnn_out_dim": 128,
+        "gnn_heads": 4,
+        "dropout": 0.3,
+        "window_size": 60,
+        "d_in": 1,
+        "num_nodes": 51
+    },
+    "rag": {
+        "vector_dim": 128,
+        "k_neighbors": 10,
+        "alpha_1": 0.34,
+        "alpha_2": 0.33,
+        "alpha_3": 0.33,
+        "gamma": 0.5
+    },
+    "curriculum": {
+        "enabled": true,
+        "k_warmup": 30,
+        "safety_floor_ratio": 0.05,
+        "fallback_ratio": 0.3
+    },
+    "training": {
+        "epochs": 35,
+        "batch_size": 128,
+        "lr": 0.001,
+        "weight_decay": 0.001,
+        "grad_clip": 1.0,
+        "device": "cuda",
+        "seed": 44,
+        "val_every": 5,
+        "threshold": null
+    },
+    "data": {
+        "dataset": "swat",
+        "data_dir": "/kaggle/input/datasets/vishalp030303/swat-raw/",
+        "stride": 1,
+        "train_split": 0.7,
+        "val_split": 0.15,
+        "test_split": 0.15,
+        "normalize": true,
+        "graph_threshold": 0.5
+    },
+    "logging": {
+        "use_wandb": false,
+        "wandb_project": "rc-tgad",
+        "run_name": "H_struct_only_seed44",
+        "checkpoint_dir": "checkpoints",
+        "save_best_only": true,
+        "log_every": 5
+    }
+}
