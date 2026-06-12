@@ -5,7 +5,7 @@
         "gnn_out_dim": 128,
         "gnn_heads": 4,
         "dropout": 0.3,
-        "window_size": 75,
+        "window_size": 60,
         "d_in": 1,
         "num_nodes": 51
     },
@@ -24,7 +24,7 @@
         "fallback_ratio": 0.3
     },
     "training": {
-        "epochs": 50,
+        "epochs": 35,
         "batch_size": 128,
         "lr": 0.001,
         "weight_decay": 0.001,
@@ -47,7 +47,7 @@
     "logging": {
         "use_wandb": false,
         "wandb_project": "rc-tgad",
-        "run_name": "Full_RC-TGAD_seed42",
+        "run_name": "H_temp_+_H_struct_no_RAG_seed42",
         "checkpoint_dir": "checkpoints",
         "save_best_only": true,
         "log_every": 5
