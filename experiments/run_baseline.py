@@ -71,7 +71,6 @@ def load_dataset(cfg, seed, mock=False):
             stride    = stride,
             val_ratio = cfg["data"]["val_split"],
         )
-    # 🛡️ ADDED WADI ROUTING HERE
     elif dataset_name == "wadi":
         from data.wadi import load_wadi
         train_data, val_data, test_data, _ = load_wadi(
@@ -80,6 +79,15 @@ def load_dataset(cfg, seed, mock=False):
             stride    = stride,
             val_ratio = cfg["data"]["val_split"],
             graph_threshold = cfg["data"].get("graph_threshold", 0.1)
+        )
+    elif dataset_name == "psm":
+        from data.psm import load_psm
+        train_data, val_data, test_data, _ = load_psm(
+            data_dir  = cfg["data"]["data_dir"],
+            window    = win,
+            stride    = stride,
+            val_ratio = cfg["data"]["val_split"],
+            graph_threshold = cfg["data"].get("graph_threshold", None)
         )
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
@@ -174,7 +182,7 @@ def _run_inference(backbone, dataset, cfg, device):
                 target.view(target.shape[0], target.shape[1], -1), 
                 dim=-1
             )
-            # 🛡️ FIX: Changed from max() to mean() to prevent single-sensor False Positives
+            
             system_scores = node_scores.mean(dim=1)
             system_labels = y[:, 0]
             
@@ -190,12 +198,10 @@ def evaluate_on_test(backbone, test_dataset, cfg, device, val_dataset=None) -> d
     
     v_mean, v_std = 0.0, 1.0
     
-    # 1. Sweep Validation Set to calculate base distribution
     if val_dataset is not None:
         print("\n[Evaluate] Running inference on Validation Set for distribution stats...")
         val_scores, _ = _run_inference(backbone, val_dataset, cfg, device)
         
-        # Smooth to ignore point-noise, then calculate distribution
         smoothed_val = smooth_scores(val_scores, window_size=10)
         
         v_mean = float(np.mean(smoothed_val))
@@ -203,25 +209,20 @@ def evaluate_on_test(backbone, test_dataset, cfg, device, val_dataset=None) -> d
         
         print(f"[Evaluate] Val Mean: {v_mean:.4f} | Val Std: {v_std:.4f}")
 
-    # 2. Run Inference on Test Set
     print("[Evaluate] Running inference on Test Set...")
     test_scores, test_labels = _run_inference(backbone, test_dataset, cfg, device)
 
-    # 3. 🚀 STRATEGY 1: The F1 Maximization Sweep
     print("[Evaluate] Sweeping thresholds (2.0σ to 6.0σ) to find absolute maximum F1-PA...")
     
     best_f1 = -1
     best_metrics = None
-    best_mult = 4.5 # Default fallback
+    best_mult = 4.5 
     
-    # Sweep from 2.0 to 6.0 in steps of 0.1
     for mult in np.arange(2.0, 6.1, 0.1):
         thresh = float(v_mean + (mult * v_std))
         
-        # Evaluate using this specific threshold
         current_metrics = evaluate(test_scores, test_labels, threshold=thresh, verbose=False)
         
-        # Track the absolute best F1 score
         if current_metrics["f1_pa"] > best_f1:
             best_f1 = current_metrics["f1_pa"]
             best_metrics = current_metrics
@@ -280,7 +281,6 @@ def run_single_seed(cfg, seed, mock, results_dir):
     )
 
     print(f"\n[Baseline] Evaluating on test set (seed={seed})...")
-    # Passed val_data here to activate the thresholding
     test_results = evaluate_on_test(backbone, test_data, cfg, device, val_dataset=val_data)
 
     print(f"\n  Test Results (seed={seed}):")
