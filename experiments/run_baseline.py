@@ -1,7 +1,3 @@
-# experiments/run_baseline.py
-# PERSON 3 — Baseline Experiment Runner
-# RC-TGAD: Runs the NO-CURRICULUM baseline (vanilla LSTM+GNN with no scheduling)
-
 import os
 import sys
 import json
@@ -15,11 +11,6 @@ from configs.config_loader import load_config
 from curriculum.trainer    import Trainer, MockBackbone, MockRAGScorer, MockTemporalGraphDataset
 from utils.metrics         import evaluate, AblationTracker, smooth_scores
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# ARGUMENT PARSER
-# ─────────────────────────────────────────────────────────────────────────────
-
 def parse_args():
     parser = argparse.ArgumentParser(description="RC-TGAD Baseline Runner")
     parser.add_argument("--config",   type=str,  default="configs/default.yaml")
@@ -28,11 +19,6 @@ def parse_args():
     parser.add_argument("--dataset",  type=str,  default=None)
     parser.add_argument("--override", type=str,  nargs="*", default=[])
     return parser.parse_args()
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# DATASET & MODEL LOADERS
-# ─────────────────────────────────────────────────────────────────────────────
 
 def load_dataset(cfg, seed, mock=False):
     if mock:
@@ -53,7 +39,7 @@ def load_dataset(cfg, seed, mock=False):
             data_dir  = cfg["data"]["data_dir"],
             window    = win,
             stride    = stride,
-            val_ratio = cfg["data"]["val_split"],
+            val_ratio = cfg["data"].get("val_split", 0.15),
         )
     elif dataset_name == "smap":
         from data.smap import load_smap
@@ -61,7 +47,7 @@ def load_dataset(cfg, seed, mock=False):
             data_dir  = cfg["data"].get("data_dir", "data/raw/smap"),
             window    = win,
             stride    = stride,
-            val_ratio = cfg["data"]["val_split"],
+            val_ratio = cfg["data"].get("val_split", 0.15),
         )
     elif dataset_name == "msl":
         from data.smap import load_msl      
@@ -69,17 +55,25 @@ def load_dataset(cfg, seed, mock=False):
             data_dir  = cfg["data"].get("data_dir", "data/raw/smap"),
             window    = win,
             stride    = stride,
-            val_ratio = cfg["data"]["val_split"],
+            val_ratio = cfg["data"].get("val_split", 0.15),
         )
-    # 🛡️ ADDED WADI ROUTING HERE
     elif dataset_name == "wadi":
         from data.wadi import load_wadi
         train_data, val_data, test_data, _ = load_wadi(
             data_dir  = cfg["data"]["data_dir"],
             window    = win,
             stride    = stride,
-            val_ratio = cfg["data"]["val_split"],
+            val_ratio = cfg["data"].get("val_split", 0.15),
             graph_threshold = cfg["data"].get("graph_threshold", 0.1)
+        )
+    elif dataset_name == "psm":
+        from data.psm import load_psm
+        train_data, val_data, test_data, _ = load_psm(
+            data_dir  = cfg["data"]["data_dir"],
+            window    = win,
+            stride    = stride,
+            val_ratio = cfg["data"].get("val_split", 0.15),
+            graph_threshold = cfg["data"].get("graph_threshold", None)
         )
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
@@ -95,11 +89,7 @@ def load_dataset(cfg, seed, mock=False):
 
 def load_backbone(cfg, mock=False):
     if mock:
-        return MockBackbone(
-            d_in=cfg["model"]["d_in"],
-            d_z=cfg["model"]["gnn_out_dim"],
-            num_nodes=10   
-        )
+        return MockBackbone(d_in=cfg["model"]["d_in"], d_z=cfg["model"]["gnn_out_dim"], num_nodes=10)
     from backbone.backbone import Backbone
     return Backbone(
         d_in        = cfg["model"]["d_in"],         
@@ -115,15 +105,8 @@ def load_backbone(cfg, mock=False):
 def load_rag_scorer(cfg, mock=False):
     return MockRAGScorer()
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# INFERENCE & EVALUATION WITH DYNAMIC THRESHOLDING
-# ─────────────────────────────────────────────────────────────────────────────
-
 @torch.no_grad()
 def _run_inference(backbone, dataset, cfg, device):
-    """Helper function to run pure inference on any dataset split."""
-    from collections import defaultdict
     from torch.utils.data import DataLoader
     
     all_scores = []
@@ -174,7 +157,7 @@ def _run_inference(backbone, dataset, cfg, device):
                 target.view(target.shape[0], target.shape[1], -1), 
                 dim=-1
             )
-            # 🛡️ FIX: Changed from max() to mean() to prevent single-sensor False Positives
+            
             system_scores = node_scores.mean(dim=1)
             system_labels = y[:, 0]
             
@@ -183,58 +166,38 @@ def _run_inference(backbone, dataset, cfg, device):
             
     return np.array(all_scores), np.array(all_labels)
 
-
 @torch.no_grad()
 def evaluate_on_test(backbone, test_dataset, cfg, device, val_dataset=None) -> dict:
-    """Evaluates the model, using a dynamic sweep to find the absolute best F1 threshold."""
-    
     v_mean, v_std = 0.0, 1.0
     
-    # 1. Sweep Validation Set to calculate base distribution
     if val_dataset is not None:
         print("\n[Evaluate] Running inference on Validation Set for distribution stats...")
         val_scores, _ = _run_inference(backbone, val_dataset, cfg, device)
-        
-        # Smooth to ignore point-noise, then calculate distribution
         smoothed_val = smooth_scores(val_scores, window_size=10)
-        
         v_mean = float(np.mean(smoothed_val))
         v_std = float(np.std(smoothed_val))
-        
         print(f"[Evaluate] Val Mean: {v_mean:.4f} | Val Std: {v_std:.4f}")
 
-    # 2. Run Inference on Test Set
     print("[Evaluate] Running inference on Test Set...")
     test_scores, test_labels = _run_inference(backbone, test_dataset, cfg, device)
 
-    # 3. 🚀 STRATEGY 1: The F1 Maximization Sweep
     print("[Evaluate] Sweeping thresholds (2.0σ to 6.0σ) to find absolute maximum F1-PA...")
     
     best_f1 = -1
     best_metrics = None
-    best_mult = 4.5 # Default fallback
+    best_mult = 4.5 
     
-    # Sweep from 2.0 to 6.0 in steps of 0.1
     for mult in np.arange(2.0, 6.1, 0.1):
         thresh = float(v_mean + (mult * v_std))
-        
-        # Evaluate using this specific threshold
         current_metrics = evaluate(test_scores, test_labels, threshold=thresh, verbose=False)
         
-        # Track the absolute best F1 score
         if current_metrics["f1_pa"] > best_f1:
             best_f1 = current_metrics["f1_pa"]
             best_metrics = current_metrics
             best_mult = mult
 
     print(f"[Evaluate] 🎯 Optimal Threshold Locked: Mean + {best_mult:.1f}σ")
-    
     return best_metrics
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# SINGLE SEED RUN
-# ─────────────────────────────────────────────────────────────────────────────
 
 def run_single_seed(cfg, seed, mock, results_dir):
     torch.manual_seed(seed)
@@ -280,7 +243,6 @@ def run_single_seed(cfg, seed, mock, results_dir):
     )
 
     print(f"\n[Baseline] Evaluating on test set (seed={seed})...")
-    # Passed val_data here to activate the thresholding
     test_results = evaluate_on_test(backbone, test_data, cfg, device, val_dataset=val_data)
 
     print(f"\n  Test Results (seed={seed}):")
@@ -296,11 +258,6 @@ def run_single_seed(cfg, seed, mock, results_dir):
         json.dump({**test_results, "history": history}, f, indent=2)
 
     return test_results
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# MAIN
-# ─────────────────────────────────────────────────────────────────────────────
 
 def main():
     args = parse_args()
