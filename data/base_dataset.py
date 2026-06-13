@@ -1,8 +1,3 @@
-"""
-base_dataset.py — Sliding window generator with causal graph construction.
-Updated for UNIFIED PROCESSING UNIT: Yields full plant snapshots [N, W, 1] per timestep 't'.
-"""
-
 import numpy as np
 import torch
 from torch.utils.data import Dataset
@@ -13,7 +8,8 @@ class BaseTimeSeriesDataset(Dataset):
                  window: int = 30, stride: int = 1,
                  graph: Data | None = None,
                  norm_mean: np.ndarray | None = None,
-                 norm_std: np.ndarray | None = None):
+                 norm_std: np.ndarray | None = None,
+                 graph_threshold: float | None = None):
         super().__init__()
         assert signals.shape == labels.shape, "Signals and labels must match shape."
 
@@ -23,7 +19,6 @@ class BaseTimeSeriesDataset(Dataset):
         self.N = N
         self.T = T
 
-        # Use provided mean/std (prevents val/test leakage)
         if norm_mean is not None and norm_std is not None:
             self.mean = norm_mean.reshape(1, -1)
             self.std  = norm_std.reshape(1, -1)
@@ -34,17 +29,13 @@ class BaseTimeSeriesDataset(Dataset):
         self.signals = (signals - self.mean) / self.std
         self.labels  = labels
 
-        # Build semantic correlation graph
         self.graph = graph if graph is not None else \
-            build_graph_from_correlation(self.signals, threshold=0.5)
+            build_graph_from_correlation(self.signals, threshold=graph_threshold)
 
-        # 🛡️ FIX 1: Unit of execution is now TIMESTEP 't' across ALL nodes
         self._index_t = np.arange(window, T, stride, dtype=np.int32)
         self._len = len(self._index_t)
 
         self._precomputed_labels = self._vectorized_window_labels()
-        
-        # 🛡️ FIX 4: Correct Data Shape [num_samples, N, W, 1] applied here
         self._precomputed_windows = self._build_all_windows()
 
     def _vectorized_window_labels(self) -> np.ndarray:
@@ -54,14 +45,10 @@ class BaseTimeSeriesDataset(Dataset):
         cum[1:] = np.cumsum(self.labels, axis=0)
         
         t_arr = self._index_t
-        # Get labels for ALL nodes at time t -> Shape: [num_samples, N]
         window_sums = cum[t_arr] - cum[t_arr - W]
         return (window_sums > 0).astype(np.int64)
 
     def _build_all_windows(self) -> torch.Tensor:
-        """
-        Extracts windows and forces [N, W, 1] shape per timestep.
-        """
         from numpy.lib.stride_tricks import as_strided
         T, N = self.signals.shape
         W = self.window
@@ -72,42 +59,43 @@ class BaseTimeSeriesDataset(Dataset):
         all_windows_view = as_strided(self.signals, shape=shape, strides=new_strides)
         
         start_indices = self._index_t - W
-        
-        # Extracted shape is [num_samples, W, N]
         windows = all_windows_view[start_indices]
-        
-        # Transpose to [num_samples, N, W] so each node has its own temporal sequence
         windows = np.transpose(windows, (0, 2, 1))
-        
-        # Add feature dimension -> [num_samples, N, W, 1]
         return torch.from_numpy(windows.copy().astype(np.float32)).unsqueeze(-1)
 
     def __len__(self):
         return self._len
 
     def __getitem__(self, idx):
-        # 🛡️ FIX: Returns the complete graph state at time 't'
         return {
             "t"    : int(self._index_t[idx]),
-            "x"    : self._precomputed_windows[idx], # Shape [N, W, 1]
-            "y"    : torch.tensor(self._precomputed_labels[idx], dtype=torch.long), # Shape [N]
+            "x"    : self._precomputed_windows[idx],
+            "y"    : torch.tensor(self._precomputed_labels[idx], dtype=torch.long),
             "graph": self.graph
         }
 
     def as_flat_list(self):
-        # Used by curriculum scheduler to get timesteps and their corresponding label vectors
         return list(zip(self._index_t.tolist(), self._precomputed_labels.tolist()))
 
 
-def build_graph_from_correlation(signals: np.ndarray, threshold: float = 0.5) -> Data:
-    
-    # 🛡️ FIX 2: Handle NaNs BEFORE graph build
+def build_graph_from_correlation(signals: np.ndarray, threshold: float | None = None) -> Data:
     corr = np.corrcoef(signals.T)
     corr = np.nan_to_num(corr, nan=0.0, posinf=0.0, neginf=0.0)
     
     abs_corr = np.abs(corr)
-    np.fill_diagonal(abs_corr, 0.0)
     
+    if threshold is None:
+        # Zero out diagonal temporarily just to calculate the true network percentiles cleanly
+        np.fill_diagonal(abs_corr, 0.0)
+        p85 = np.percentile(abs_corr, 85)
+        threshold = float(np.clip(p85, 0.15, 0.5))
+        print(f"🕸️ [Graph] Auto-tuned correlation threshold to: {threshold:.3f}")
+        
+    # 🛡️ THE FIX: Force Self-Loops
+    # Set the diagonal back to 1.0. Because 1.0 is always >= threshold, 
+    # every single node is guaranteed to connect to itself. No isolated nodes!
+    np.fill_diagonal(abs_corr, 1.0)
+        
     mask = abs_corr >= threshold
     src, dst = np.where(mask)
     edge_index = torch.tensor(np.stack([src, dst]), dtype=torch.long)

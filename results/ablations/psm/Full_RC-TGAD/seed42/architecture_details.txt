@@ -1,0 +1,19 @@
+=== RC-TGAD SPATIO-TEMPORAL BACKBONE ===
+
+Total Model Parameters: 59,329
+Input Node Features (d_in): 1
+Graph Nodes (Sensors): 25
+
+=== DETAILED PYTORCH MODULE ===
+Backbone(
+  (lstm): LSTMEncoder(
+    (lstm): LSTM(1, 64, num_layers=2, batch_first=True, dropout=0.1)
+    (recon_head): Linear(in_features=64, out_features=1, bias=True)
+  )
+  (gnn): GNNReasoner(
+    (gat1): GATConv(64, 16, heads=4)
+    (gat2): GATConv(64, 64, heads=1)
+    (norm1): LayerNorm((64,), eps=1e-05, elementwise_affine=True)
+    (norm2): LayerNorm((64,), eps=1e-05, elementwise_affine=True)
+  )
+)
