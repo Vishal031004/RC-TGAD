@@ -1,20 +1,20 @@
 {
     "model": {
-        "lstm_hidden": 128,
+        "lstm_hidden": 64,
         "lstm_layers": 2,
-        "gnn_out_dim": 128,
+        "gnn_out_dim": 64,
         "gnn_heads": 4,
-        "dropout": 0.3,
-        "window_size": 75,
+        "dropout": 0.1,
+        "window_size": 60,
         "d_in": 1,
         "num_nodes": 51
     },
     "rag": {
-        "vector_dim": 128,
+        "vector_dim": 64,
         "k_neighbors": 10,
-        "alpha_1": 0.34,
+        "alpha_1": 0.33,
         "alpha_2": 0.33,
-        "alpha_3": 0.33,
+        "alpha_3": 0.34,
         "gamma": 0.5
     },
     "curriculum": {
@@ -24,10 +24,10 @@
         "fallback_ratio": 0.3
     },
     "training": {
-        "epochs": 50,
+        "epochs": 35,
         "batch_size": 128,
         "lr": 0.001,
-        "weight_decay": 0.001,
+        "weight_decay": 1e-05,
         "grad_clip": 1.0,
         "device": "cuda",
         "seed": 42,
@@ -35,8 +35,8 @@
         "threshold": null
     },
     "data": {
-        "dataset": "swat",
-        "data_dir": "/kaggle/input/datasets/vishalparitala/swat-raw/",
+        "dataset": "psm",
+        "data_dir": "/kaggle/input/datasets/ljolm08/pooled-server-metrics-psm/data",
         "stride": 1,
         "train_split": 0.7,
         "val_split": 0.15,
