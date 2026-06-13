@@ -1,0 +1,37 @@
+[2026-06-13 10:57:24] 🚀 Deep Research Logger Initialized.
+[2026-06-13 10:57:25] 💾 Architecture details saved.
+[2026-06-13 10:57:33] 📈 [Curriculum Update] Epoch 0 | Unlocked 38956/129855 samples (30.0%) | Max Hardness: 0.2736
+[2026-06-13 10:57:34] 📈 [Curriculum Update] Epoch 1 | Unlocked 38956/129855 samples (30.0%) | Max Hardness: 0.2736
+[2026-06-13 10:57:35] 📈 [Curriculum Update] Epoch 2 | Unlocked 38956/129855 samples (30.0%) | Max Hardness: 0.2736
+[2026-06-13 10:57:36] 📈 [Curriculum Update] Epoch 3 | Unlocked 38956/129855 samples (30.0%) | Max Hardness: 0.2736
+[2026-06-13 10:57:37] 📈 [Curriculum Update] Epoch 4 | Unlocked 38956/129855 samples (30.0%) | Max Hardness: 0.2736
+[2026-06-13 10:57:38] 📈 [Curriculum Update] Epoch 5 | Unlocked 38956/129855 samples (30.0%) | Max Hardness: 0.2736
+[2026-06-13 10:57:39] 📈 [Curriculum Update] Epoch 6 | Unlocked 10856/129855 samples (8.4%) | Max Hardness: 0.2000
+[2026-06-13 10:57:40] 📈 [Curriculum Update] Epoch 7 | Unlocked 17919/129855 samples (13.8%) | Max Hardness: 0.2333
+[2026-06-13 10:57:41] 📈 [Curriculum Update] Epoch 8 | Unlocked 29769/129855 samples (22.9%) | Max Hardness: 0.2667
+[2026-06-13 10:57:42] 📈 [Curriculum Update] Epoch 9 | Unlocked 60423/129855 samples (46.5%) | Max Hardness: 0.3000
+[2026-06-13 10:57:43] 📈 [Curriculum Update] Epoch 10 | Unlocked 67676/129855 samples (52.1%) | Max Hardness: 0.3333
+[2026-06-13 10:57:52] 📈 [Curriculum Update] Epoch 11 | Unlocked 72529/129855 samples (55.9%) | Max Hardness: 0.3667
+[2026-06-13 10:57:53] 📈 [Curriculum Update] Epoch 12 | Unlocked 78965/129855 samples (60.8%) | Max Hardness: 0.4000
+[2026-06-13 10:57:54] 📈 [Curriculum Update] Epoch 13 | Unlocked 85366/129855 samples (65.7%) | Max Hardness: 0.4333
+[2026-06-13 10:57:55] 📈 [Curriculum Update] Epoch 14 | Unlocked 91625/129855 samples (70.6%) | Max Hardness: 0.4667
+[2026-06-13 10:57:56] 📈 [Curriculum Update] Epoch 15 | Unlocked 97508/129855 samples (75.1%) | Max Hardness: 0.5000
+[2026-06-13 10:57:57] 📈 [Curriculum Update] Epoch 16 | Unlocked 102956/129855 samples (79.3%) | Max Hardness: 0.5333
+[2026-06-13 10:57:58] 📈 [Curriculum Update] Epoch 17 | Unlocked 107765/129855 samples (83.0%) | Max Hardness: 0.5667
+[2026-06-13 10:58:00] 📈 [Curriculum Update] Epoch 18 | Unlocked 111640/129855 samples (86.0%) | Max Hardness: 0.6000
+[2026-06-13 10:58:01] 📈 [Curriculum Update] Epoch 19 | Unlocked 115437/129855 samples (88.9%) | Max Hardness: 0.6333
+[2026-06-13 10:58:02] 📈 [Curriculum Update] Epoch 20 | Unlocked 118601/129855 samples (91.3%) | Max Hardness: 0.6667
+[2026-06-13 10:58:11] 📈 [Curriculum Update] Epoch 21 | Unlocked 122270/129855 samples (94.2%) | Max Hardness: 0.7000
+[2026-06-13 10:58:12] 📈 [Curriculum Update] Epoch 22 | Unlocked 123580/129855 samples (95.2%) | Max Hardness: 0.7333
+[2026-06-13 10:58:13] 📈 [Curriculum Update] Epoch 23 | Unlocked 124810/129855 samples (96.1%) | Max Hardness: 0.7666
+[2026-06-13 10:58:14] 📈 [Curriculum Update] Epoch 24 | Unlocked 125739/129855 samples (96.8%) | Max Hardness: 0.8000
+[2026-06-13 10:58:15] 📈 [Curriculum Update] Epoch 25 | Unlocked 126669/129855 samples (97.5%) | Max Hardness: 0.8333
+[2026-06-13 10:58:16] 📈 [Curriculum Update] Epoch 26 | Unlocked 127495/129855 samples (98.2%) | Max Hardness: 0.8666
+[2026-06-13 10:58:17] 📈 [Curriculum Update] Epoch 27 | Unlocked 128084/129855 samples (98.6%) | Max Hardness: 0.9000
+[2026-06-13 10:58:18] 📈 [Curriculum Update] Epoch 28 | Unlocked 128454/129855 samples (98.9%) | Max Hardness: 0.9333
+[2026-06-13 10:58:19] 📈 [Curriculum Update] Epoch 29 | Unlocked 128803/129855 samples (99.2%) | Max Hardness: 0.9666
+[2026-06-13 10:58:20] 📈 [Curriculum Update] Epoch 30 | Unlocked 129855/129855 samples (100.0%) | Max Hardness: 1.0000
+[2026-06-13 10:58:29] 📈 [Curriculum Update] Epoch 31 | Unlocked 129855/129855 samples (100.0%) | Max Hardness: 1.0000
+[2026-06-13 10:58:30] 📈 [Curriculum Update] Epoch 32 | Unlocked 129855/129855 samples (100.0%) | Max Hardness: 1.0000
+[2026-06-13 10:58:31] 📈 [Curriculum Update] Epoch 33 | Unlocked 129855/129855 samples (100.0%) | Max Hardness: 1.0000
+[2026-06-13 10:58:32] 📈 [Curriculum Update] Epoch 34 | Unlocked 129855/129855 samples (100.0%) | Max Hardness: 1.0000

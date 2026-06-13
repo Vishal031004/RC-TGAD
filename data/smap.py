@@ -1,88 +1,106 @@
+import os
 import numpy as np
 import pandas as pd
-from pathlib import Path
-from .base_dataset import BaseTimeSeriesDataset, build_graph_from_correlation
+from data.base_dataset import BaseTimeSeriesDataset, build_graph_from_correlation
 
-MIN_STD = 0.01      # drop channels with near-zero variance
-MIN_LEN = 1000      # drop channels that are too short
+def _load_telemanom(data_dir, dataset="SMAP"):
+    if not os.path.exists(data_dir):
+        raise FileNotFoundError(f"Provided data_dir does not exist: {data_dir}")
 
-def _load_telemanom(data_dir: Path, dataset: str = "SMAP"):
-    anomaly_csv = data_dir / "labeled_anomalies.csv"
+    # Search for labeled_anomalies.csv
+    anomaly_csv = os.path.join(data_dir, "labeled_anomalies.csv")
+    if not os.path.exists(anomaly_csv):
+        parent_csv = os.path.join(os.path.dirname(data_dir), "labeled_anomalies.csv")
+        child_csv = os.path.join(data_dir, "data", "labeled_anomalies.csv")
+        if os.path.exists(parent_csv):
+            anomaly_csv = parent_csv
+        elif os.path.exists(child_csv):
+            anomaly_csv = child_csv
+        else:
+            root_dir = data_dir.split("/data")[0]
+            root_csv = os.path.join(root_dir, "labeled_anomalies.csv")
+            if os.path.exists(root_csv):
+                anomaly_csv = root_csv
+            else:
+                raise FileNotFoundError(f"Could not find labeled_anomalies.csv in {data_dir} or nearby directories.")
+
+    # Search for train/test directories
+    train_dir = os.path.join(data_dir, "train")
+    test_dir = os.path.join(data_dir, "test")
+    if not os.path.exists(train_dir):
+        child_train = os.path.join(data_dir, "data", "train")
+        child_test = os.path.join(data_dir, "data", "test")
+        if os.path.exists(child_train):
+            train_dir, test_dir = child_train, child_test
+
+    print(f"📌 [SMAP Loader] Using CSV: {anomaly_csv}")
+    print(f"📌 [SMAP Loader] Using Train Dir: {train_dir}")
+
     label_df = pd.read_csv(anomaly_csv)
     label_df = label_df[label_df["spacecraft"] == dataset]
-    channel_ids = label_df["chan_id"].tolist()
+    channels = label_df["chan_id"].tolist()
 
-    train_list, test_list, valid_ids = [], [], []
-    for cid in channel_ids:
-        tr_path = data_dir / "train" / f"{cid}.npy"
-        te_path = data_dir / "test"  / f"{cid}.npy"
-        if not tr_path.exists() or not te_path.exists():
+    train_list, test_list, test_lbl_list, channel_ids = [], [], [], []
+
+    for chan in channels:
+        tr_p = os.path.join(train_dir, f"{chan}.npy")
+        te_p = os.path.join(test_dir, f"{chan}.npy")
+        if not (os.path.exists(tr_p) and os.path.exists(te_p)):
             continue
-        tr = np.load(tr_path)[:, 0]
-        te = np.load(te_path)[:, 0]
-        # filter out degenerate channels
-        if tr.std() < MIN_STD or len(tr) < MIN_LEN or len(te) < MIN_LEN:
-            print(f"  [skip] {cid}: std={tr.std():.4f}, len_train={len(tr)}, len_test={len(te)}")
-            continue
-        train_list.append(tr)
-        test_list.append(te)
-        valid_ids.append(cid)
 
-    print(f"  Kept {len(valid_ids)}/{len(channel_ids)} channels for {dataset}")
+        train_list.append(np.load(tr_p))
+        test_list.append(np.load(te_p))
+        
+        row = label_df[label_df["chan_id"] == chan].iloc[0]
+        indices = eval(row["anomaly_sequences"])
+        lbl = np.zeros(len(test_list[-1]), dtype=np.int64)
+        for start, end in indices:
+            lbl[start : end + 1] = 1
+        test_lbl_list.append(lbl)
+        channel_ids.append(chan)
 
-    # Pad/truncate to median length instead of min (less data loss)
-    def align(arrays):
+    print(f"🏁 Kept {len(channel_ids)}/{len(channels)} channels for {dataset}")
+    
+    if len(channel_ids) == 0:
+        raise ValueError(f"No valid .npy channel files found in {train_dir}")
+
+    def align(arrays, is_label=False):
+        # Determine target sequence length along the time axis
         target = int(np.median([len(a) for a in arrays]))
-        out = []
+        res = []
         for a in arrays:
+            # Extract primary telemetry channel (column 0) if 2D array
+            if not is_label and a.ndim > 1:
+                a = a[:, 0]
+                
             if len(a) >= target:
-                out.append(a[:target])
+                res.append(a[:target])
             else:
-                # pad with last value
-                pad = np.full(target - len(a), a[-1])
-                out.append(np.concatenate([a, pad]))
-        return np.stack(out, axis=1).astype(np.float32)
+                res.append(np.pad(a, (0, target - len(a)), "edge"))
+        return np.stack(res, axis=1)
 
-    train_signals = align(train_list)
-    test_signals  = align(test_list)
+    train_sig = align(train_list, is_label=False)
+    test_sig = align(test_list, is_label=False)
+    
+    # 🛡️ THE FIX: Keep the original node-level labels intact!
+    # Removing the flattening/broadcasting logic so each sensor keeps its own ground truth.
+    test_lbl_matrix = align(test_lbl_list, is_label=True)
 
-    T_test, N = test_signals.shape
-    test_labels = np.zeros((T_test, N), dtype=np.int64)
-    for ni, cid in enumerate(valid_ids):
-        row = label_df[label_df["chan_id"] == cid].iloc[0]
-        import ast
-        for (start, end) in ast.literal_eval(row["anomaly_sequences"]):
-            end = min(end + 1, T_test)
-            if start < T_test:
-                test_labels[start:end, ni] = 1
+    return train_sig, test_sig, test_lbl_matrix, channel_ids
 
-    print(f"  Train: {train_signals.shape}, Test: {test_signals.shape}, "
-          f"Anomaly rate: {test_labels.mean()*100:.1f}%")
-    return train_signals, test_signals, test_labels, valid_ids
+def load_smap(data_dir: str, window: int = 30, stride: int = 1, val_ratio: float = 0.15, graph_threshold: float | None = None):
+    train_sig, test_sig, test_lbl, _ = _load_telemanom(data_dir, "SMAP")
+    
+    split_idx = int(len(train_sig) * (1 - val_ratio))
+    tr_signals = train_sig[:split_idx]
+    va_signals = train_sig[split_idx:]
 
+    tr_labels = np.zeros_like(tr_signals, dtype=np.int64)
+    va_labels = np.zeros_like(va_signals, dtype=np.int64)
 
-def _load_split(data_dir, dataset, window, stride, val_ratio):
-    data_dir = Path(data_dir)
-    train_sig, test_sig, test_lbl, channel_ids = _load_telemanom(data_dir, dataset)
+    train_set = BaseTimeSeriesDataset(tr_signals, tr_labels, window, stride, graph_threshold=graph_threshold)
+    val_set = BaseTimeSeriesDataset(va_signals, va_labels, window, stride, graph=train_set.graph)
+    test_set = BaseTimeSeriesDataset(test_sig, test_lbl, window, stride, graph=train_set.graph,
+                                     norm_mean=train_set.mean, norm_std=train_set.std)
 
-    T_n   = len(train_sig)
-    t_val = int(T_n * (1 - val_ratio))
-    val_sig   = train_sig[t_val:]
-    val_lbl   = np.zeros_like(val_sig, dtype=np.int64)
-    train_sig = train_sig[:t_val]
-    train_lbl = np.zeros_like(train_sig, dtype=np.int64)
-
-    tmp_norm = (train_sig - train_sig.mean(0)) / (train_sig.std(0) + 1e-8)
-    graph    = build_graph_from_correlation(tmp_norm, threshold=0.5)
-
-    train_ds = BaseTimeSeriesDataset(train_sig, train_lbl, window=window, stride=stride, graph=graph)
-    val_ds   = BaseTimeSeriesDataset(val_sig,   val_lbl,   window=window, stride=stride, graph=graph)
-    test_ds  = BaseTimeSeriesDataset(test_sig,  test_lbl,  window=window, stride=stride, graph=graph)
-    return train_ds, val_ds, test_ds, channel_ids
-
-
-def load_smap(data_dir="data/raw/smap", window=30, stride=1, val_ratio=0.15):
-    return _load_split(data_dir, "SMAP", window, stride, val_ratio)
-
-def load_msl(data_dir="data/raw/smap", window=30, stride=1, val_ratio=0.15):
-    return _load_split(data_dir, "MSL", window, stride, val_ratio)
+    return train_set, val_set, test_set, train_set.graph
